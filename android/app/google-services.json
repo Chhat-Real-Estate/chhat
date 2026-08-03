@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "536811926725",
+    "project_id": "chhat-app-7e66e",
+    "storage_bucket": "chhat-app-7e66e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:536811926725:android:d27367fd6079f8b92eacac",
+        "android_client_info": {
+          "package_name": "com.chhat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ9UhsPs7MCcJp0subggBW5uYOQC9FTLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:536811926725:android:4adf8936bfa690812eacac",
+        "android_client_info": {
+          "package_name": "com.example.chhat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ9UhsPs7MCcJp0subggBW5uYOQC9FTLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
