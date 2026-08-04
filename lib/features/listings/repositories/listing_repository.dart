@@ -7,7 +7,9 @@ import '../../../core/utils/app_logger.dart';
 const int kListingsPageSize = 20;
 
 class ListingRepository {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+  ListingRepository({FirebaseFirestore? firestore})
+      : _db = firestore ?? FirebaseFirestore.instance;
 
   // Listing create karo
   Future<String> createListing(ListingModel listing) async {

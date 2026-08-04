@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'single_flight_guard.dart';
 import '../core/utils/app_logger.dart';
 
 /// MSG91 ka OTP widget ek WebView ke andar chalta hai (koi official Flutter
@@ -16,6 +17,8 @@ class Msg91WidgetBridge {
   Completer<bool>? _readyCompleter;
   Completer<Map<String, dynamic>>? _sendCompleter;
   Completer<Map<String, dynamic>>? _verifyCompleter;
+  final _sendGuard = SingleFlightGuard<Map<String, dynamic>>();
+  final _verifyGuard = SingleFlightGuard<Map<String, dynamic>>();
 
   void init() {
     controller = WebViewController()
@@ -64,34 +67,41 @@ class Msg91WidgetBridge {
 
   /// OTP bhejta hai, success par MSG91 ka reqId return karta hai.
   Future<String> sendOtp(String phone10Digit) async {
-    // FIX: Race condition — pehle wali call abhi pending hai toh naya call reject karo
-    if (_sendCompleter != null && !_sendCompleter!.isCompleted) {
-      throw Exception('Pehli OTP request abhi process ho rahi hai, thoda ruko');
-    }
     await _waitUntilReady();
-    _sendCompleter = Completer<Map<String, dynamic>>();
+    final completer = _sendGuard
+        .start('Pehli OTP request abhi process ho rahi hai, thoda ruko');
+    _sendCompleter = completer;
     await controller.runJavaScript("callSendOtp('91$phone10Digit');");
-    final result = await _sendCompleter!.future.timeout(
+    final result = await completer.future.timeout(
       const Duration(seconds: 20),
-      onTimeout: () =>
-          throw Exception('OTP bhejne mein time zyada lag raha hai'),
+      onTimeout: () {
+        // FIX: Timeout pe completer khud complete nahi hota tha, isliye
+        // agli baar guard hamesha "processing" bolta reh jaata tha (stuck)
+        if (!completer.isCompleted) {
+          completer.completeError(
+              Exception('OTP bhejne mein time zyada lag raha hai'));
+        }
+        throw Exception('OTP bhejne mein time zyada lag raha hai');
+      },
     );
     return (result['data']?['message'] ?? '').toString();
   }
 
   /// OTP verify karta hai, success par access-token (JWT) return karta hai.
   Future<String> verifyOtp(String otp) async {
-    // FIX: Race condition — pehle wali call abhi pending hai toh naya call reject karo
-    if (_verifyCompleter != null && !_verifyCompleter!.isCompleted) {
-      throw Exception(
-          'Pehli verify request abhi process ho rahi hai, thoda ruko');
-    }
-    _verifyCompleter = Completer<Map<String, dynamic>>();
+    final completer = _verifyGuard
+        .start('Pehli verify request abhi process ho rahi hai, thoda ruko');
+    _verifyCompleter = completer;
     await controller.runJavaScript("callVerifyOtp('$otp');");
-    final result = await _verifyCompleter!.future.timeout(
+    final result = await completer.future.timeout(
       const Duration(seconds: 20),
-      onTimeout: () =>
-          throw Exception('Verify hone mein time zyada lag raha hai'),
+      onTimeout: () {
+        if (!completer.isCompleted) {
+          completer.completeError(
+              Exception('Verify hone mein time zyada lag raha hai'));
+        }
+        throw Exception('Verify hone mein time zyada lag raha hai');
+      },
     );
     return (result['data']?['message'] ?? '').toString();
   }

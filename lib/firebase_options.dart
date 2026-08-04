@@ -52,21 +52,19 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCZ9UhsPs7MCcJp0subggBW5uYOQC9FTLI',
-    appId: '1:536811926725:android:4adf8936bfa690812eacac',
+    appId: '1:536811926725:android:d27367fd6079f8b92eacac',
     messagingSenderId: '536811926725',
     projectId: 'chhat-app-7e66e',
     storageBucket: 'chhat-app-7e66e.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDip2XD4OCC2iLiLjGWJSdmrixktADY-4Q',
-    appId: '1:536811926725:ios:29750509b64ee7892eacac',
+    appId: '1:536811926725:ios:31a58829c33d88582eacac',
     messagingSenderId: '536811926725',
     projectId: 'chhat-app-7e66e',
     storageBucket: 'chhat-app-7e66e.firebasestorage.app',
-    iosBundleId: 'com.example.chhat',
+    iosBundleId: 'com.chhat.app',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDip2XD4OCC2iLiLjGWJSdmrixktADY-4Q',
     appId: '1:536811926725:ios:29750509b64ee7892eacac',
@@ -85,5 +83,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'chhat-app-7e66e.firebasestorage.app',
     measurementId: 'G-PZG3B3FFYJ',
   );
-
 }

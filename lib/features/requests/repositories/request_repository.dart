@@ -3,7 +3,9 @@ import '../models/request_model.dart';
 import '../../../core/utils/app_logger.dart';
 
 class RequestRepository {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+  RequestRepository({FirebaseFirestore? firestore})
+      : _db = firestore ?? FirebaseFirestore.instance;
 
   // Request bheje (Tenant ya Owner)
   // FIX: TOCTOU race — pehle check + add alag calls the, rapid double-tap se
