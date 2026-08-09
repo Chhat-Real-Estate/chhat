@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
+import '../../../core/utils/app_exceptions.dart';
 
 // NAYA: Skeleton Animation
 class _PulseSkeleton extends StatefulWidget {
@@ -483,65 +484,10 @@ class _TenantIncomingTabState extends State<_TenantIncomingTab> {
                           fontWeight: FontWeight.w500)),
                   _buildTimeline(req),
                   if (isAccepted) ...[
-                    FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(req.ownerId)
-                            .get(),
-                        builder: (ctx, ownerSnap) {
-                          String ownerPhone = 'Loading...';
-                          if (ownerSnap.hasData && ownerSnap.data!.exists) {
-                            ownerPhone = (ownerSnap.data!.data()
-                                    as Map<String, dynamic>)['phone'] ??
-                                req.ownerId;
-                          }
-                          return SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                if (ownerPhone != 'Loading...') {
-                                  final Uri url =
-                                      Uri.parse('tel:+91$ownerPhone');
-                                  launchUrl(url);
-                                }
-                              },
-                              icon: const Icon(Icons.call,
-                                  color: Colors.white, size: 18),
-                              label: Text('Call Owner: $ownerPhone',
-                                  style: const TextStyle(color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4CAF50),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6))),
-                            ),
-                          );
-                        })
+                    _CallOwnerButton(ownerId: req.ownerId)
                   ] else if (isPending) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                            child: OutlinedButton(
-                                onPressed: () => RequestRepository()
-                                    .updateRequestStatus(
-                                        req.id!, 'rejected', widget.userId),
-                                style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(
-                                        color: Colors.redAccent)),
-                                child: const Text('Reject',
-                                    style:
-                                        TextStyle(color: Colors.redAccent)))),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: ElevatedButton(
-                                onPressed: () => RequestRepository()
-                                    .updateRequestStatus(
-                                        req.id!, 'accepted', widget.userId),
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFC62828)),
-                                child: const Text('Accept',
-                                    style: TextStyle(color: Colors.white)))),
-                      ],
-                    )
+                    _AcceptRejectButtons(
+                        requestId: req.id!, userId: widget.userId)
                   ],
                   const Divider(),
                   GestureDetector(
@@ -564,6 +510,161 @@ class _TenantIncomingTabState extends State<_TenantIncomingTab> {
           },
         );
       },
+    );
+  }
+}
+
+// NAYA: Call Owner button - ek hi baar fetch karta hai (initState), stuck
+// "Loading..." aur double +91 dono bugs fix karta hai.
+class _CallOwnerButton extends StatefulWidget {
+  final String ownerId;
+  const _CallOwnerButton({required this.ownerId});
+
+  @override
+  State<_CallOwnerButton> createState() => _CallOwnerButtonState();
+}
+
+enum _CallState { loading, ready, error }
+
+class _CallOwnerButtonState extends State<_CallOwnerButton> {
+  _CallState _state = _CallState.loading;
+  String? _phone;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOwnerPhone();
+  }
+
+  Future<void> _fetchOwnerPhone() async {
+    setState(() => _state = _CallState.loading);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.ownerId)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      final phone = doc.exists
+          ? (doc.data() as Map<String, dynamic>)['phone'] as String?
+          : null;
+      if (phone == null || phone.isEmpty) {
+        if (mounted) setState(() => _state = _CallState.error);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _phone = phone;
+          _state = _CallState.ready;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _state = _CallState.error);
+    }
+  }
+
+  void _call() {
+    // FIX: 'phone' Firestore me already +91 ke saath saved hai, dobara
+    // prefix mat lagao warna +91+91XXXXXXXXXX ban jaata hai.
+    final number = _phone!.startsWith('+') ? _phone! : '+91$_phone';
+    launchUrl(Uri.parse('tel:$number'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_state == _CallState.error) {
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _fetchOwnerPhone,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Number nahi mila, dobara try karo'),
+        ),
+      );
+    }
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _state == _CallState.ready ? _call : null,
+        icon: _state == _CallState.loading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.call, color: Colors.white, size: 18),
+        label: Text(_state == _CallState.loading ? 'Loading...' : 'Call Owner',
+            style: const TextStyle(color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4CAF50),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+      ),
+    );
+  }
+}
+
+// NAYA: Accept/Reject buttons - busy state dikhata hai, error catch karke
+// user-friendly message dikhata hai (pehle button silently kuch nahi karta
+// tha agar update fail ho jaye, isliye "stuck" jaisa lagta tha).
+class _AcceptRejectButtons extends StatefulWidget {
+  final String requestId;
+  final String userId;
+  const _AcceptRejectButtons({required this.requestId, required this.userId});
+
+  @override
+  State<_AcceptRejectButtons> createState() => _AcceptRejectButtonsState();
+}
+
+class _AcceptRejectButtonsState extends State<_AcceptRejectButtons> {
+  bool _busy = false;
+
+  Future<void> _respond(String status) async {
+    setState(() => _busy = true);
+    try {
+      String? myPhone;
+      if (status == 'accepted') {
+        final prefs = await SharedPreferences.getInstance();
+        myPhone = prefs.getString('userPhone');
+      }
+      await RequestRepository().updateRequestStatus(
+          widget.requestId, status, widget.userId,
+          tenantPhone: myPhone);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(mapToAppException(e).message)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+            child: OutlinedButton(
+                onPressed: _busy ? null : () => _respond('rejected'),
+                style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent)),
+                child: const Text('Reject',
+                    style: TextStyle(color: Colors.redAccent)))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: ElevatedButton(
+                onPressed: _busy ? null : () => _respond('accepted'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC62828)),
+                child: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Accept',
+                        style: TextStyle(color: Colors.white)))),
+      ],
     );
   }
 }

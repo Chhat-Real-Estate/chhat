@@ -243,6 +243,29 @@ class _OtpScreenState extends State<OtpScreen> with CodeAutoFill {
 
     setState(() => _loading = true);
 
+    // Google Play review ke liye reserved test-account — MSG91 poori tarah
+    // skip karke seedha backend se verify karta hai.
+    const testPhone = '9999999999';
+    const testOtp = '123456';
+    if (widget.phoneNumber.trim() == testPhone && enteredOtp == testOtp) {
+      try {
+        final result = await Msg91Service.verifyTestAccount(testPhone, testOtp);
+        final customToken = result['customToken'].toString();
+        final uid = result['uid'].toString();
+        await FirebaseAuth.instance.signInWithCustomToken(customToken);
+        await _handleLoginSuccess(widget.phoneNumber, uid);
+      } catch (e, st) {
+        AppLogger.error('OtpScreen.verifyTestAccount', e, st);
+        if (mounted) {
+          setState(() => _loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Verification failed. Try again.')),
+          );
+        }
+      }
+      return;
+    }
+
     try {
       final accessToken = await Msg91Service.verifyOtp(_reqId, enteredOtp);
       final result = await Msg91Service.verifyWithBackend(accessToken);

@@ -1,7 +1,7 @@
 name: chhat
 description: Room Khojo, Dalal Nahi.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -15,6 +15,7 @@ dependencies:
   # Firebase
   firebase_core: ^3.1.0
   firebase_auth: ^5.1.0
+  firebase_crashlytics: ^4.1.0
   cloud_firestore: ^5.1.0
   firebase_storage: ^12.4.10
   firebase_messaging: ^15.0.0
@@ -44,6 +45,7 @@ dependencies:
   intl: ^0.20.2
   url_launcher: ^6.3.2
   webview_flutter: ^4.7.0
+  flutter_native_splash: ^2.4.1
 
 dev_dependencies:
   flutter_test:
@@ -52,12 +54,28 @@ dev_dependencies:
   build_runner: ^2.4.9
   riverpod_generator: ^2.4.0
   fake_cloud_firestore: ^3.1.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+  generate: true   # localization ke liye
   assets:
     - assets/images/chhat_logo.png
     - assets/icons/
+    - assets/images/
     - assets/msg91_widget.html
 
-  generate: true   # localization ke liye
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/chhat_logo.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/images/chhat_logo.png"
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/images/chhat_logo.png"
+  android: true
+  ios: false

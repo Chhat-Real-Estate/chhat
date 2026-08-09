@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'core/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -12,7 +14,8 @@ import 'firebase_options.dart';
 
 void main() {
   runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+    final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
     // Flutter framework errors (widget build/layout/paint errors)
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -30,10 +33,20 @@ void main() {
 
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
+
+    // Debug mode mein Crashlytics collection off rakho, taaki testing ke
+    // crashes production dashboard mein noise na banayein
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+
     runApp(const ProviderScope(child: ChhatApp()));
+    FlutterNativeSplash.remove();
   }, (error, stack) {
     // Catches everything else (async errors outside Flutter's own error zone)
     AppLogger.error('UncaughtZoneError', error, stack);
+    if (!kDebugMode) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
   });
 }
 

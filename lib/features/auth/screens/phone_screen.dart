@@ -4,6 +4,8 @@ import '../../../services/msg91_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // NAYA: Consent save karne ke liye
 import 'package:flutter/gestures.dart'; // NAYA: Tappable text link ke liye
+import 'package:flutter/foundation.dart'; // NAYA: kDebugMode check ke liye
+import 'package:sms_autofill/sms_autofill.dart'; // NAYA: App hash debug print ke liye
 
 class PhoneScreen extends StatefulWidget {
   const PhoneScreen({super.key});
@@ -16,6 +18,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
   final _phoneController = TextEditingController();
   bool _loading = false;
   bool _consentChecked = false; // NAYA: Checkbox track karne ke liye
+
+  @override
+  void initState() {
+    super.initState();
+    // TEMP DEBUG: SMS Retriever ke liye 11-char app hash console me print karta
+    // hai — isse copy karke MSG91 SMS template me suffix karna hoga, warna
+    // OTP autofill kabhi kaam nahi karega. Debug + release dono build se
+    // alag-alag hash nikalke MSG91 ko dena hoga (matlab release APK bhi ek
+    // baar chalake yeh dekhna padega).
+    if (kDebugMode) {
+      SmsAutoFill().getAppSignature.then((sig) {
+        debugPrint('📱 SMS RETRIEVER APP HASH: $sig');
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -235,6 +252,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('consentVersion', '1.0');
       await prefs.setString('consentGivenAt', DateTime.now().toIso8601String());
+
+      // Google Play review ke liye reserved test-account.
+      // MSG91 ko bilkul call nahi karta — seedha OTP screen pe le jata hai,
+      // jahan otp_screen.dart backend se test-credentials verify karega.
+      const testPhone = '9999999999';
+      if (_phoneController.text.trim() == testPhone) {
+        if (mounted) {
+          setState(() => _loading = false);
+          context.go('/otp', extra: {
+            'verificationId': 'test-review-bypass',
+            'phoneNumber': _phoneController.text,
+          });
+        }
+        return;
+      }
 
       final reqId = await Msg91Service.sendOtp(_phoneController.text);
 

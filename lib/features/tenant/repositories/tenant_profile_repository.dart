@@ -39,8 +39,11 @@ class TenantProfileRepository {
   }
 
   Stream<DocumentSnapshot> watchTenantProfile(String userId) {
-    return _db.collection('tenantProfiles').doc(userId).snapshots().handleError(
-        (e, st) {
+    return _db
+        .collection('tenantProfiles')
+        .doc(userId)
+        .snapshots()
+        .handleError((e, st) {
       AppLogger.error('TenantProfileRepository.watchTenantProfile', e, st);
     });
   }

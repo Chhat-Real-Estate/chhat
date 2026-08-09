@@ -134,14 +134,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'userId': widget.listing.ownerId,
-        'title': 'New Room Request!',
-        'body': 'Ek tenant ne aapke room me interest dikhaya hai.',
-        'type': 'request',
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // NOTE: notification yahan client se nahi banate — index.js ka
+      // onNewRequestCreated Cloud Function isse admin SDK se khud handle
+      // karta hai jab request document create hota hai (owner ko duplicate
+      // notification jaane se bachne ke liye).
 
       setState(() => _requestSent = true);
 
@@ -275,7 +271,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
           listingId: widget.listing.id,
         );
 
-        if (context.mounted) {
+        if (mounted) {
           Navigator.pop(context); // close loader
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
@@ -283,7 +279,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
               backgroundColor: Colors.redAccent));
         }
       } catch (e) {
-        if (context.mounted) {
+        if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Network Error! Report fail ho gayi.')));

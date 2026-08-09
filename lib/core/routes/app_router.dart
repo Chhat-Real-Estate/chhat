@@ -19,6 +19,7 @@ import '../../features/profile/screens/privacy_policy_screen.dart'; // NAYA: Pri
 import '../../features/profile/screens/data_export_screen.dart'; // NAYA: DPDP Data Export Route
 import '../../features/profile/screens/privacy_settings_screen.dart'; // NAYA: Privacy Settings
 import '../../features/listings/models/listing_model.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -77,6 +78,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => const NoTransitionPage(
           child: RoleSelectionScreen(),
         ),
+      ),
+
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) {
+          final userId = state.extra as String?;
+          if (userId == null) {
+            return const NoTransitionPage(child: PhoneScreen());
+          }
+          return NoTransitionPage(
+            child: NotificationsScreen(userId: userId),
+          );
+        },
       ),
 
       // NAYA TENANT ONBOARDING

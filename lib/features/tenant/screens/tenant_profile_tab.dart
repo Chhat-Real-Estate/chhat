@@ -89,7 +89,50 @@ class TenantProfileTab extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Your Details (Onboarding)',
+                        const Text('Personal Details',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87)),
+                        TextButton.icon(
+                          onPressed: () =>
+                              context.push('/edit-profile', extra: 'tenant'),
+                          icon: const Icon(Icons.edit,
+                              size: 16, color: Color(0xFFC62828)),
+                          label: const Text('Edit',
+                              style: TextStyle(
+                                  color: Color(0xFFC62828),
+                                  fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300)),
+                      child: Column(
+                        children: [
+                          _buildDetailRow(
+                              'Name', data['name']?.toString() ?? 'N/A'),
+                          _buildDetailRow('Age & Gender',
+                              '${data['age']?.toString() ?? 'N/A'} - ${data['gender']?.toString() ?? 'N/A'}'),
+                          _buildDetailRow(
+                              'City', data['city']?.toString() ?? 'N/A'),
+                          _buildDetailRow(
+                              'Area', data['area']?.toString() ?? 'N/A'),
+                          _buildDetailRow(
+                              'Sub-Area', data['subArea']?.toString() ?? 'N/A'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Your Requirements',
                             style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -114,10 +157,6 @@ class TenantProfileTab extends StatelessWidget {
                           border: Border.all(color: Colors.grey.shade300)),
                       child: Column(
                         children: [
-                          _buildDetailRow(
-                              'Name', data['name']?.toString() ?? 'N/A'),
-                          _buildDetailRow('Age & Gender',
-                              '${data['age']?.toString() ?? 'N/A'} - ${data['gender']?.toString() ?? 'N/A'}'),
                           _buildDetailRow('Occupation',
                               data['occupation']?.toString() ?? 'N/A'),
                           _buildDetailRow('Tenant Type',
@@ -127,15 +166,7 @@ class TenantProfileTab extends StatelessWidget {
                           _buildDetailRow('Budget',
                               data['budgetRange']?.toString() ?? 'N/A'),
                           _buildDetailRow(
-                              'City', data['city']?.toString() ?? 'N/A'),
-                          _buildDetailRow(
-                              'Area', data['area']?.toString() ?? 'N/A'),
-                          _buildDetailRow(
-                              'Sub-Area', data['subArea']?.toString() ?? 'N/A'),
-                          _buildDetailRow(
-                              'Gender', data['gender']?.toString() ?? 'N/A'),
-                          _buildDetailRow(
-                              'Requirements',
+                              'Looking For',
                               (data['propertyRequirements'] as List<dynamic>? ??
                                       [])
                                   .join(', ')),

@@ -80,6 +80,37 @@ class ListingRepository {
             .toList());
   }
 
+  /// NAYA: Proper search — [searchKeywords] field (Cloud Function se
+  /// auto-generate hoti hai) ke against server-side query karta hai, poore
+  /// dataset pe, sirf latest N docs tak limited nahi. propertyKind
+  /// (residential/commercial) dono ke liye same tareeke se kaam karta hai.
+  Stream<List<ListingModel>> searchListings({
+    required String propertyKind,
+    String search = '',
+    int limit = 50,
+  }) {
+    Query<Map<String, dynamic>> query = _db
+        .collection('listings')
+        .where('active', isEqualTo: true)
+        .where('propertyKind', isEqualTo: propertyKind);
+
+    final trimmed = search.toLowerCase().trim();
+    if (trimmed.isNotEmpty) {
+      final words = trimmed.split(RegExp(r'\s+')).take(10).toList();
+      query = query.where('searchKeywords', arrayContainsAny: words);
+    }
+
+    return query
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .handleError((e, st) {
+      AppLogger.error('ListingRepository.searchListings', e, st);
+    }).map((snap) => snap.docs
+            .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
   /// SECURITY FIX (IDOR): pehle koi bhi apna listingId aur kisi aur ka
   /// document ID pass karke uski listing deactivate kara sakta tha, kyunki
   /// ownership check hi nahi tha. [requesterId] = current logged-in user's uid.

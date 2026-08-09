@@ -98,7 +98,8 @@ class _ExplorePage extends StatefulWidget {
 class _ExplorePageState extends State<_ExplorePage> {
   final _searchController = TextEditingController();
   String _searchArea = '';
-  Timer? _searchDebounce; // NAYA: search debounce — har keystroke pe query na chale
+  Timer?
+      _searchDebounce; // NAYA: search debounce — har keystroke pe query na chale
 
   // Advanced Filters
   String _filterPropCat = '';
@@ -672,7 +673,7 @@ class _TenantListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.go('/room-detail', extra: listing),
+      onTap: () => context.push('/room-detail', extra: listing),
       child: Container(
         height: 280,
         margin: const EdgeInsets.only(bottom: 24),

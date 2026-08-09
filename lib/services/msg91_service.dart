@@ -16,6 +16,31 @@ class Msg91Service {
     return Msg91WidgetBridge.instance.verifyOtp(otp);
   }
 
+  // Google Play review ke liye reserved test-account bypass.
+  // MSG91 ko bilkul call nahi karta — seedha backend ko test-credentials bhejta hai.
+  static Future<Map<String, dynamic>> verifyTestAccount(
+      String testPhone, String testOtp) async {
+    final res = await http
+        .post(
+          Uri.parse(_verifyBackendUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'testPhone': testPhone, 'testOtp': testOtp}),
+        )
+        .timeout(const Duration(seconds: 15),
+            onTimeout: () => throw Exception(
+                'Server response nahi de raha, dobara try karo'));
+
+    if (res.statusCode != 200) {
+      throw Exception('Verification fail ho gayi (server error)');
+    }
+
+    final data = jsonDecode(res.body);
+    if (data['success'] == true) {
+      return data;
+    }
+    throw Exception(data['error']?.toString() ?? 'Verification fail ho gayi');
+  }
+
   static Future<Map<String, dynamic>> verifyWithBackend(
       String accessToken) async {
     final res = await http

@@ -27,7 +27,8 @@ AppException mapToAppException(Object error) {
       case 'invalid-phone-number':
         return AppException('Phone number sahi format mein daalein.');
       case 'too-many-requests':
-        return AppException('Bahut zyada attempts ho gaye. Thodi der baad try karein.');
+        return AppException(
+            'Bahut zyada attempts ho gaye. Thodi der baad try karein.');
       case 'invalid-verification-code':
         return AppException('OTP galat hai. Dobara check karein.');
       case 'session-expired':
@@ -35,7 +36,8 @@ AppException mapToAppException(Object error) {
       case 'network-request-failed':
         return AppException('Internet connection check karein.');
       default:
-        return AppException('Authentication mein dikkat aayi. Dobara try karein.');
+        return AppException(
+            'Authentication mein dikkat aayi. Dobara try karein.');
     }
   }
 
@@ -45,7 +47,8 @@ AppException mapToAppException(Object error) {
       case 'permission-denied':
         return AppException('Aapko yeh action karne ki permission nahi hai.');
       case 'unavailable':
-        return AppException('Server abhi available nahi hai. Thodi der baad try karein.');
+        return AppException(
+            'Server abhi available nahi hai. Thodi der baad try karein.');
       case 'not-found':
         return AppException('Yeh data ab maujood nahi hai.');
       case 'deadline-exceeded':
@@ -60,18 +63,21 @@ AppException mapToAppException(Object error) {
   }
 
   if (error is TimeoutException) {
-    return AppException('Request bahut time le rahi hai. Internet check karke dobara try karein.');
+    return AppException(
+        'Request bahut time le rahi hai. Internet check karke dobara try karein.');
   }
 
   if (error is SocketException) {
-    return AppException('Internet connection nahi hai. Check karke dobara try karein.');
+    return AppException(
+        'Internet connection nahi hai. Check karke dobara try karein.');
   }
 
   if (error is PlatformException) {
     switch (error.code) {
       case 'camera_access_denied':
       case 'photo_access_denied':
-        return AppException('Camera/Gallery permission chahiye. Settings mein enable karein.');
+        return AppException(
+            'Camera/Gallery permission chahiye. Settings mein enable karein.');
       default:
         return AppException('Kuch galat ho gaya. Dobara try karein.');
     }

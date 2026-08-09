@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
+import '../../../core/utils/app_exceptions.dart';
 
 const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
@@ -244,106 +245,78 @@ class _IncomingRequestsTabState extends State<IncomingRequestsTab> {
             final isAccepted = req.status == 'accepted';
             final isPending = req.status == 'pending';
 
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('tenantProfiles')
-                  .doc(req.tenantId)
-                  .get(),
-              builder: (ctx, tSnap) {
-                String tenantName = 'Loading...';
-                if (tSnap.hasData && tSnap.data!.exists) {
-                  tenantName =
-                      (tSnap.data!.data() as Map<String, dynamic>)['name'] ??
-                          'Unknown Tenant';
-                }
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Room: ${req.area}',
-                              style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A237E))),
-                          IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.redAccent),
-                              onPressed: () => _deleteRequest(req.id!)),
-                        ],
-                      ),
-                      Text('Kiraya: ₹${req.rent}',
+                      Text('Room: ${req.area}',
                           style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500)),
-                      Text('Tenant: $tenantName',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade800)),
-                      _buildTimeline(req),
-                      if (isAccepted) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              final Uri url =
-                                  Uri.parse('tel:+91${req.tenantPhone}');
-                              launchUrl(url);
-                            },
-                            icon: const Icon(Icons.call,
-                                color: Colors.white, size: 18),
-                            label: Text('Call Tenant: +91 ${req.tenantPhone}',
-                                style: const TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4CAF50),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(6))),
-                          ),
-                        )
-                      ] else if (isPending) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                                child: OutlinedButton(
-                                    onPressed: () => RequestRepository()
-                                        .updateRequestStatus(
-                                            req.id!, 'rejected', widget.userId),
-                                    style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(
-                                            color: Colors.redAccent)),
-                                    child: const Text('Reject',
-                                        style: TextStyle(
-                                            color: Colors.redAccent)))),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: ElevatedButton(
-                                    onPressed: () => RequestRepository()
-                                        .updateRequestStatus(
-                                            req.id!, 'accepted', widget.userId),
-                                    style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFF1A237E)),
-                                    child: const Text('Accept',
-                                        style:
-                                            TextStyle(color: Colors.white)))),
-                          ],
-                        )
-                      ],
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A237E))),
+                      IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.redAccent),
+                          onPressed: () => _deleteRequest(req.id!)),
                     ],
                   ),
-                );
-              },
+                  Text('Kiraya: ₹${req.rent}',
+                      style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500)),
+                  _TenantNameText(
+                      tenantId: req.tenantId,
+                      prefix: 'Tenant: ',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800)),
+                  _buildTimeline(req),
+                  if (isAccepted) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: req.tenantPhone.isEmpty ||
+                                req.tenantPhone == 'Hidden'
+                            ? null
+                            : () {
+                                // FIX: tenantPhone already +91 ke saath
+                                // saved hai, dobara prefix mat lagao.
+                                final number = req.tenantPhone.startsWith('+')
+                                    ? req.tenantPhone
+                                    : '+91${req.tenantPhone}';
+                                launchUrl(Uri.parse('tel:$number'));
+                              },
+                        icon: const Icon(Icons.call,
+                            color: Colors.white, size: 18),
+                        label: Text(
+                            req.tenantPhone.isEmpty ||
+                                    req.tenantPhone == 'Hidden'
+                                ? 'Tenant number available nahi hai'
+                                : 'Call Tenant: ${req.tenantPhone}',
+                            style: const TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6))),
+                      ),
+                    )
+                  ] else if (isPending) ...[
+                    _OwnerAcceptRejectButtons(
+                        requestId: req.id!, userId: widget.userId)
+                  ],
+                ],
+              ),
             );
           },
         );
@@ -444,56 +417,170 @@ class _SentRequestsTabState extends State<SentRequestsTab> {
           itemBuilder: (context, index) {
             final req = requests[index];
 
-            return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('tenantProfiles')
-                    .doc(req.tenantId)
-                    .get(),
-                builder: (ctx, tSnap) {
-                  String tenantName = 'Loading...';
-                  if (tSnap.hasData && tSnap.data!.exists) {
-                    tenantName =
-                        (tSnap.data!.data() as Map<String, dynamic>)['name'] ??
-                            'Unknown Tenant';
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Invite: ${req.area}',
-                                style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87)),
-                            IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Colors.redAccent),
-                                onPressed: () => _deleteRequest(req.id!)),
-                          ],
-                        ),
-                        Text('Sent to: $tenantName',
-                            style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w500)),
-                        _buildTimeline(req),
-                      ],
-                    ),
-                  );
-                });
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Invite: ${req.area}',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87)),
+                      IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.redAccent),
+                          onPressed: () => _deleteRequest(req.id!)),
+                    ],
+                  ),
+                  _TenantNameText(
+                      tenantId: req.tenantId,
+                      prefix: 'Sent to: ',
+                      style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500)),
+                  _buildTimeline(req),
+                ],
+              ),
+            );
           },
         );
       },
+    );
+  }
+}
+
+// NAYA: Accept/Reject buttons - busy state dikhata hai, error catch karke
+// user-friendly message dikhata hai (pehle button silently kuch nahi karta
+// tha agar update fail ho jaye, isliye "stuck" jaisa lagta tha).
+class _OwnerAcceptRejectButtons extends StatefulWidget {
+  final String requestId;
+  final String userId;
+  const _OwnerAcceptRejectButtons(
+      {required this.requestId, required this.userId});
+
+  @override
+  State<_OwnerAcceptRejectButtons> createState() =>
+      _OwnerAcceptRejectButtonsState();
+}
+
+class _OwnerAcceptRejectButtonsState extends State<_OwnerAcceptRejectButtons> {
+  bool _busy = false;
+
+  Future<void> _respond(String status) async {
+    setState(() => _busy = true);
+    try {
+      await RequestRepository()
+          .updateRequestStatus(widget.requestId, status, widget.userId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(mapToAppException(e).message)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+            child: OutlinedButton(
+                onPressed: _busy ? null : () => _respond('rejected'),
+                style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent)),
+                child: const Text('Reject',
+                    style: TextStyle(color: Colors.redAccent)))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: ElevatedButton(
+                onPressed: _busy ? null : () => _respond('accepted'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A237E)),
+                child: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Accept',
+                        style: TextStyle(color: Colors.white)))),
+      ],
+    );
+  }
+}
+
+// NAYA: Tenant ka naam ek hi baar fetch karta hai (initState), timeout +
+// retry ke saath — pehle "Loading..." kabhi stuck ho sakta tha agar fetch
+// fail ho jaaye ya list rebuild baar-baar naya Future bana deta tha.
+class _TenantNameText extends StatefulWidget {
+  final String tenantId;
+  final String prefix;
+  final TextStyle style;
+  const _TenantNameText(
+      {required this.tenantId, required this.prefix, required this.style});
+
+  @override
+  State<_TenantNameText> createState() => _TenantNameTextState();
+}
+
+class _TenantNameTextState extends State<_TenantNameText> {
+  String _name = 'Loading...';
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    setState(() {
+      _error = false;
+      _name = 'Loading...';
+    });
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('tenantProfiles')
+          .doc(widget.tenantId)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      final name = doc.exists
+          ? (doc.data() as Map<String, dynamic>)['name'] as String?
+          : null;
+      if (mounted) {
+        setState(() =>
+            _name = (name == null || name.isEmpty) ? 'Unknown Tenant' : name);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _name = 'Tap to retry';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _error ? _fetch : null,
+      child: Text('${widget.prefix}$_name',
+          style: _error
+              ? widget.style.copyWith(color: Colors.redAccent)
+              : widget.style),
     );
   }
 }

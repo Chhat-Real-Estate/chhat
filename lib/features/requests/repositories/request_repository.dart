@@ -93,7 +93,8 @@ class RequestRepository {
   // Owner accept/reject kare — SECURITY FIX (IDOR): sirf ownerId ya tenantId
   // wala hi apni request update kar sakta hai
   Future<void> updateRequestStatus(
-      String requestId, String status, String requesterId) async {
+      String requestId, String status, String requesterId,
+      {String? tenantPhone}) async {
     final doc = await _db.collection('requests').doc(requestId).get();
     if (!doc.exists) {
       throw Exception('Request nahi mili');
@@ -103,9 +104,19 @@ class RequestRepository {
       throw Exception(
           'Aapko is request ko update karne ki permission nahi hai');
     }
-    await doc.reference.update({
+    final updateData = <String, dynamic>{
       'status': status,
-    });
+      'respondedBy': requesterId,
+      'respondedAt': FieldValue.serverTimestamp(),
+    };
+    // FIX: Owner ne invite bheja tha to tenantPhone 'Hidden' save hua tha
+    // (owner ko tenant ka number pata nahi hota). Ab tenant khud accept
+    // kar raha hai, to apna asli number yahin fill kar do taaki owner
+    // baad me call kar sake.
+    if (tenantPhone != null && tenantPhone.isNotEmpty) {
+      updateData['tenantPhone'] = tenantPhone;
+    }
+    await doc.reference.update(updateData);
   }
 
   // NAYA: Request Delete karo (Dono side se permanently gayab ho jayegi)

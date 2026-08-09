@@ -218,6 +218,11 @@ class _TenantRequirementsScreenState extends State<TenantRequirementsScreen> {
                           onChanged: (val) => setState(() {
                             _propertyKind = val!;
                             _propertyReq = [];
+                            // FIX: kind badalne par purane residential/commercial
+                            // specific answers reset karo — dono ke options
+                            // alag hain, purani value dikhana confusing hai.
+                            _tenantType = null;
+                            _occupation = null;
                           }),
                         ),
                       ),
@@ -232,19 +237,33 @@ class _TenantRequirementsScreenState extends State<TenantRequirementsScreen> {
                           onChanged: (val) => setState(() {
                             _propertyKind = val!;
                             _propertyReq = [];
+                            _tenantType = null;
+                            _occupation = null;
                           }),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
+                  // FIX: Commercial ke liye "Who will live" aur "Occupation"
+                  // (residential-only, personal questions) ki jagah business
+                  // se related sawaal — ab dono kind ke liye contextually
+                  // sahi cheez poochta hai.
                   _buildDropdown(
-                      'Who will live? (Tenant Type)',
+                      _propertyKind == 'commercial'
+                          ? 'Business Type'
+                          : 'Who will live? (Tenant Type)',
                       _tenantType,
-                      _tenantTypeOptions,
+                      _propertyKind == 'commercial'
+                          ? PropertyOptions.suitableFor
+                          : _tenantTypeOptions,
                       (v) => setState(() => _tenantType = v)),
-                  _buildDropdown('Occupation', _occupation, _occupationOptions,
-                      (v) => setState(() => _occupation = v)),
+                  if (_propertyKind == 'residential')
+                    _buildDropdown(
+                        'Occupation',
+                        _occupation,
+                        _occupationOptions,
+                        (v) => setState(() => _occupation = v)),
                   _buildDropdown('When to move in?', _moveIn, _moveInOptions,
                       (v) => setState(() => _moveIn = v)),
                   _buildDropdown('Budget Range', _budgetRange, _budgetOptions,

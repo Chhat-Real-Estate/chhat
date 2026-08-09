@@ -5,6 +5,9 @@ import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
 import '../../reports/repositories/report_repository.dart';
 import '../widgets/owner_filter_panel.dart';
+import '../../notifications/widgets/notification_bell_icon.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/app_exceptions.dart';
 
 const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
@@ -48,9 +51,10 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
         title: const Text('Find Tenants',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
+          if (userId != null) NotificationBellIcon(userId: userId!),
           IconButton(
             icon: Icon(_showFilters ? Icons.filter_list_off : Icons.tune,
-                color: Colors.white),
+                color: const Color.fromARGB(255, 249, 248, 248)),
             onPressed: () => setState(() => _showFilters = !_showFilters),
           )
         ],
@@ -523,17 +527,9 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                                       senderType: 'owner',
                                     ));
 
-                                    await FirebaseFirestore.instance
-                                        .collection('notifications')
-                                        .add({
-                                      'userId': tenantId,
-                                      'title': 'New Room Invite!',
-                                      'body':
-                                          'Ek owner ne aapko apne room ke liye invite bheja hai.',
-                                      'type': 'invite',
-                                      'isRead': false,
-                                      'createdAt': FieldValue.serverTimestamp(),
-                                    });
+                                    // NOTE: notification yahan client se nahi banate — index.js ka
+                                    // onNewRequestCreated Cloud Function isse admin SDK se khud
+                                    // handle karta hai jab request document create hota hai.
 
                                     if (context.mounted)
                                       ScaffoldMessenger.of(context)
@@ -541,14 +537,16 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                                               content: Text(
                                                   'Invitation Sent Successfully!'),
                                               backgroundColor: Colors.green));
-                                  } catch (e) {
+                                  } catch (e, st) {
+                                    AppLogger.error(
+                                        'FindTenantsScreen.sendRoomInvite',
+                                        e,
+                                        st);
                                     if (context.mounted)
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(SnackBar(
-                                              content: Text(e
-                                                  .toString()
-                                                  .replaceAll(
-                                                      'Exception: ', ''))));
+                                              content: Text(mapToAppException(e)
+                                                  .message)));
                                   }
                                 }
                               },

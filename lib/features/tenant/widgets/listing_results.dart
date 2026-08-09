@@ -11,6 +11,7 @@ class ListingResults extends StatefulWidget {
   final String filterToilet;
   final RangeValues rentRange;
   final RangeValues depositRange;
+  final VoidCallback? onResetFilters;
 
   const ListingResults({
     super.key,
@@ -21,6 +22,7 @@ class ListingResults extends StatefulWidget {
     required this.filterToilet,
     required this.rentRange,
     required this.depositRange,
+    this.onResetFilters,
   });
 
   @override
@@ -67,15 +69,25 @@ class _ListingResultsState extends State<ListingResults> {
   @override
   void initState() {
     super.initState();
-    _listingsStream = ListingRepository().getNearbyListings('');
+    _listingsStream = ListingRepository().searchListings(
+        propertyKind: widget.filterPropertyKind, search: widget.area);
   }
 
   @override
   void didUpdateWidget(covariant ListingResults oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // FIX: pehle stream sirf ek baar initState mein banta tha aur kabhi
+    // update nahi hota tha — isliye search/kind change karne par bhi wahi
+    // purana data dikhta rehta tha. Ab area ya kind badalne par naya
+    // server-side query chalta hai.
     if (oldWidget.area != widget.area ||
-        oldWidget.filterPropertyKind != widget.filterPropertyKind ||
-        oldWidget.filterTenantType != widget.filterTenantType ||
+        oldWidget.filterPropertyKind != widget.filterPropertyKind) {
+      setState(() {
+        _listingsStream = ListingRepository().searchListings(
+            propertyKind: widget.filterPropertyKind, search: widget.area);
+        _displayLimit = 10;
+      });
+    } else if (oldWidget.filterTenantType != widget.filterTenantType ||
         oldWidget.rentRange != widget.rentRange ||
         oldWidget.filterPropCat != widget.filterPropCat ||
         oldWidget.filterToilet != widget.filterToilet ||
@@ -105,7 +117,9 @@ class _ListingResultsState extends State<ListingResults> {
                 const SizedBox(height: 20),
                 OutlinedButton.icon(
                   onPressed: () => setState(() {
-                    _listingsStream = ListingRepository().getNearbyListings('');
+                    _listingsStream = ListingRepository().searchListings(
+                        propertyKind: widget.filterPropertyKind,
+                        search: widget.area);
                   }),
                   icon: const Icon(Icons.refresh, color: Color(0xFFC62828)),
                   label: const Text('Retry',
@@ -170,22 +184,11 @@ class _ListingResultsState extends State<ListingResults> {
 
         var listings = snapshot.data ?? [];
 
-        // SEARCH FILTER — area/city/subArea/landmark/category pe contains
+        // NOTE: search (searchKeywords) aur propertyKind ab server-side
+        // (ListingRepository.searchListings) filter hote hain — yahan client
+        // side dobara filter karne ki zaroorat nahi. `search` sirf empty-state
+        // message ke liye rakha hai.
         final search = widget.area.toLowerCase().trim();
-        if (search.isNotEmpty) {
-          listings = listings.where((l) {
-            return l.area.toLowerCase().contains(search) ||
-                l.city.toLowerCase().contains(search) ||
-                l.subArea.toLowerCase().contains(search) ||
-                l.landmark.toLowerCase().contains(search) ||
-                l.propertyCategory.toLowerCase().contains(search);
-          }).toList();
-        }
-
-        // PROPERTY KIND FILTER (Residential vs Commercial)
-        listings = listings
-            .where((l) => l.propertyKind == widget.filterPropertyKind)
-            .toList();
 
         // PROPERTY CATEGORY FILTER
         if (widget.filterPropCat.isNotEmpty) {
@@ -242,10 +245,26 @@ class _ListingResultsState extends State<ListingResults> {
                   search.isNotEmpty
                       ? '"$search" ke liye koi room nahi mila'
                       : 'Koi room available nahi hai',
-                  style:
-                      const TextStyle(fontSize: 16, color: Color(0xFF999999)),
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF666666)),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Filters hata ke dekho, ya koi doosra area search karo',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF999999)),
+                  textAlign: TextAlign.center,
+                ),
+                if (widget.onResetFilters != null) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: widget.onResetFilters,
+                    icon: const Icon(Icons.filter_alt_off, size: 18),
+                    label: const Text('Clear Filters'),
+                  ),
+                ]
               ],
             ),
           );
@@ -254,9 +273,39 @@ class _ListingResultsState extends State<ListingResults> {
         final displayedList = listings.take(_displayLimit).toList();
         final hasMore = listings.length > _displayLimit;
 
+        // NAYA: Active filters ko chips ke roop me top pe dikhao — user ko
+        // pata rahe konse filters lage hain, bina panel dobara khole.
+        final activeChips = <String>[
+          if (widget.filterPropCat.isNotEmpty) widget.filterPropCat,
+          if (widget.filterTenantType.isNotEmpty) widget.filterTenantType,
+          if (widget.filterToilet.isNotEmpty) widget.filterToilet,
+          if (rentFiltered) 'Budget',
+          if (depositFiltered) 'Deposit',
+        ];
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (activeChips.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: activeChips
+                      .map((c) => Chip(
+                            label: Text(c,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white)),
+                            backgroundColor: const Color(0xFFC62828),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ))
+                      .toList(),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text('${listings.length} rooms mile',

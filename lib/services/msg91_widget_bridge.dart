@@ -37,6 +37,11 @@ class Msg91WidgetBridge {
               break;
             case 'sendFailure':
               AppLogger.error('Msg91WidgetBridge.sendOtp', data['error'], null);
+              // TEMP DEBUG: release build me AppLogger console pe nahi
+              // dikhta, isliye asli MSG91 error yahan force-print kar rahe.
+              // eslint-disable-next-line
+              // ignore: avoid_print
+              print('🔴 MSG91 SEND FAILURE RAW: ${data['error']}');
               _sendCompleter
                   ?.completeError(Exception('OTP bhejne mein dikkat aayi'));
               break;
