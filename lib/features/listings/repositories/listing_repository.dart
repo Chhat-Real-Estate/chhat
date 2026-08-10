@@ -75,6 +75,7 @@ class ListingRepository {
         .snapshots()
         .handleError((e, st) {
       AppLogger.error('ListingRepository.getNearbyListings', e, st);
+      throw e;
     }).map((snap) => snap.docs
             .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
             .toList());
@@ -105,7 +106,11 @@ class ListingRepository {
         .limit(limit)
         .snapshots()
         .handleError((e, st) {
+      // FIX: pehle sirf log hota tha, rethrow nahi — isliye StreamBuilder ko
+      // error kabhi pata hi nahi chalta tha aur skeleton loading hamesha ke
+      // liye atki reh jaati thi (koi error message ya retry button nahi).
       AppLogger.error('ListingRepository.searchListings', e, st);
+      throw e;
     }).map((snap) => snap.docs
             .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
             .toList());

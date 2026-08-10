@@ -581,24 +581,52 @@ class _CallOwnerButtonState extends State<_CallOwnerButton> {
         ),
       );
     }
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _state == _CallState.ready ? _call : null,
-        icon: _state == _CallState.loading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.call, color: Colors.white, size: 18),
-        label: Text(_state == _CallState.loading ? 'Loading...' : 'Call Owner',
-            style: const TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF4CAF50),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-      ),
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _state == _CallState.ready ? _call : null,
+            icon: _state == _CallState.loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.call, color: Colors.white, size: 18),
+            label: Text(
+                _state == _CallState.loading ? 'Loading...' : 'Call Owner',
+                style: const TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4CAF50),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6))),
+          ),
+        ),
+        if (_state == _CallState.ready) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                final number = _phone!.startsWith('+') ? _phone! : '+91$_phone';
+                // FIX: '+' aur non-digit chars hatao, wa.me sirf raw digits
+                // (country code ke saath) accept karta hai.
+                final digits = number.replaceAll(RegExp(r'[^\d]'), '');
+                launchUrl(Uri.parse('https://wa.me/$digits'),
+                    mode: LaunchMode.externalApplication);
+              },
+              icon: const Icon(Icons.chat, color: Color(0xFF25D366), size: 18),
+              label: const Text('WhatsApp',
+                  style: TextStyle(color: Color(0xFF25D366))),
+              style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF25D366)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6))),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

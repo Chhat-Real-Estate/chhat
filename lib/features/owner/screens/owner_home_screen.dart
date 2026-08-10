@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../services/push_notification_service.dart';
 import 'find_tenants_screen.dart';
 import 'owner_listings_screen.dart';
 import 'owner_requests_screen.dart';
@@ -9,15 +11,27 @@ const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
 
 class OwnerHomeScreen extends StatefulWidget {
-  const OwnerHomeScreen({super.key});
+  final int initialTab;
+  const OwnerHomeScreen({super.key, this.initialTab = 0});
 
   @override
   State<OwnerHomeScreen> createState() => _OwnerHomeScreenState();
 }
 
 class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex = widget.initialTab;
   DateTime? _lastBackPress;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final userId = prefs.getString('userId');
+      if (userId != null && userId.isNotEmpty) {
+        PushNotificationService.init(userId);
+      }
+    });
+  }
 
   List<Widget> get _pages => [
         const FindTenantsScreen(),

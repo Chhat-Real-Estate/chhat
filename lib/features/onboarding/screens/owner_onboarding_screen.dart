@@ -139,13 +139,13 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
       _buildStep4Pricing(),
       _buildStep5Details(),
       _buildMultiSelectGrid([
-        'Furnished',
+        if (!isCommercial) 'Furnished',
         'Attached Toilet',
         'Shared Toilet',
         'Water Supply - Indoor',
         'Water Supply - Outdoor',
         'WiFi',
-        'Cooking Allowed'
+        if (isCommercial) 'Canteen' else 'Cooking Allowed',
       ], _selectedFacilities),
       isCommercial
           ? _buildMultiSelectGrid(PropertyOptions.suitableFor, _suitableFor)
@@ -956,43 +956,45 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
               controller: _builtUpAreaController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _cleanInputDeco('Built-up Area (sqft)')),
+              decoration: _cleanInputDeco('Built-up Area (sqft) (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _superBuiltUpAreaController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _cleanInputDeco('Super Built-up Area (sqft)')),
+              decoration:
+                  _cleanInputDeco('Super Built-up Area (sqft) (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _plotAreaController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _cleanInputDeco('Plot Area (sqft)')),
+              decoration: _cleanInputDeco('Plot Area (sqft) (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _totalFloorsController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _cleanInputDeco('Total Floors in Building')),
+              decoration:
+                  _cleanInputDeco('Total Floors in Building (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _ceilingHeightController,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: _cleanInputDeco('Ceiling Height (ft)')),
+              decoration: _cleanInputDeco('Ceiling Height (ft) (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _frontageController,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: _cleanInputDeco('Frontage (ft)')),
+              decoration: _cleanInputDeco('Frontage (ft) (Optional)')),
           const SizedBox(height: 16),
           TextField(
               controller: _roadWidthController,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: _cleanInputDeco('Road Width (ft)')),
+              decoration: _cleanInputDeco('Road Width (ft) (Optional)')),
         ],
       ),
     );
@@ -1121,11 +1123,12 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
   }
 
   Widget _buildStep9Photos() {
+    final isCommercial = _propertyKind == 'commercial';
     List<String> photoLabels = [
       'Front View',
-      'Inside Room',
+      isCommercial ? 'Inside Office' : 'Inside Room',
       'Toilet',
-      'Water Area',
+      isCommercial ? 'Parking' : 'Water Area',
       'Building/Galli'
     ];
     return Padding(

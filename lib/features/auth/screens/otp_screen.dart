@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sms_autofill/sms_autofill.dart';
+import 'package:smart_auth/smart_auth.dart';
 import '../../../services/msg91_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/utils/app_logger.dart';
@@ -23,26 +23,39 @@ class OtpScreen extends StatefulWidget {
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> with CodeAutoFill {
+class _OtpScreenState extends State<OtpScreen> {
   final _otpController = TextEditingController();
   late String _reqId;
   bool _loading = false;
   int _secondsLeft = 45;
   bool _canResend = false;
   Timer? _timer;
+  // NAYA: SMS User Consent API — koi app hash / DLT template change nahi
+  // chahiye. SMS aane par system consent dialog dikhta hai.
+  final _smartAuth = SmartAuth.instance;
 
   @override
   void initState() {
     super.initState();
     _reqId = widget.verificationId;
     _startTimer();
-    listenForCode(); // OTP auto-fill (Android SMS Consent)
+    _listenForOtp();
   }
 
-  @override
-  void codeUpdated() {
-    if (code != null && code!.length == 6) {
-      setState(() => _otpController.text = code!);
+  Future<void> _listenForOtp() async {
+    try {
+      final res = await _smartAuth.getSmsWithUserConsentApi();
+      if (!mounted) return;
+      if (res.hasData) {
+        final code = res.requireData.code;
+        if (code != null && code.length == 6) {
+          setState(() => _otpController.text = code);
+        }
+      }
+      // res.isCanceled ya error case me kuch nahi karna — user manually
+      // type kar sakta hai, jaisa pehle bhi option tha.
+    } catch (e, st) {
+      AppLogger.error('OtpScreen._listenForOtp', e, st);
     }
   }
 
@@ -72,7 +85,7 @@ class _OtpScreenState extends State<OtpScreen> with CodeAutoFill {
   void dispose() {
     _otpController.dispose();
     _timer?.cancel();
-    cancel(); // sms_autofill listener band karo
+    _smartAuth.removeUserConsentApiListener();
     super.dispose();
   }
 
@@ -304,10 +317,11 @@ class _OtpScreenState extends State<OtpScreen> with CodeAutoFill {
       final db = FirebaseFirestore.instance;
       final docRef = db.collection('users').doc(uid);
 
-      // NOTE: serverAndCache still server-first hai, reads kam nahi karta —
-      // sirf offline-fallback ke liye hai
-      final doc =
-          await docRef.get(const GetOptions(source: Source.serverAndCache));
+      // FIX: Login jaisi critical check ke liye hamesha server se confirm
+      // karo — 'serverAndCache' kabhi-kabhi device ke purane local cache se
+      // stale data de deta tha (jaise Firestore console se data delete karne
+      // ke baad bhi purana role/profile dikh jaata tha).
+      final doc = await docRef.get(const GetOptions(source: Source.server));
 
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;

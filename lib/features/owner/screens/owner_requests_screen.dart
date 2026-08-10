@@ -285,30 +285,60 @@ class _IncomingRequestsTabState extends State<IncomingRequestsTab> {
                   if (isAccepted) ...[
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: req.tenantPhone.isEmpty ||
-                                req.tenantPhone == 'Hidden'
-                            ? null
-                            : () {
-                                // FIX: tenantPhone already +91 ke saath
-                                // saved hai, dobara prefix mat lagao.
-                                final number = req.tenantPhone.startsWith('+')
-                                    ? req.tenantPhone
-                                    : '+91${req.tenantPhone}';
-                                launchUrl(Uri.parse('tel:$number'));
-                              },
-                        icon: const Icon(Icons.call,
-                            color: Colors.white, size: 18),
-                        label: Text(
-                            req.tenantPhone.isEmpty ||
+                      child: Column(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: req.tenantPhone.isEmpty ||
                                     req.tenantPhone == 'Hidden'
-                                ? 'Tenant number available nahi hai'
-                                : 'Call Tenant: ${req.tenantPhone}',
-                            style: const TextStyle(color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4CAF50),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6))),
+                                ? null
+                                : () {
+                                    // FIX: tenantPhone already +91 ke
+                                    // saath saved hai, dobara prefix mat
+                                    // lagao.
+                                    final number =
+                                        req.tenantPhone.startsWith('+')
+                                            ? req.tenantPhone
+                                            : '+91${req.tenantPhone}';
+                                    launchUrl(Uri.parse('tel:$number'));
+                                  },
+                            icon: const Icon(Icons.call,
+                                color: Colors.white, size: 18),
+                            label: Text(
+                                req.tenantPhone.isEmpty ||
+                                        req.tenantPhone == 'Hidden'
+                                    ? 'Tenant number available nahi hai'
+                                    : 'Call Tenant: ${req.tenantPhone}',
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                          if (req.tenantPhone.isNotEmpty &&
+                              req.tenantPhone != 'Hidden') ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  final number = req.tenantPhone.startsWith('+')
+                                      ? req.tenantPhone
+                                      : '+91${req.tenantPhone}';
+                                  final digits =
+                                      number.replaceAll(RegExp(r'[^\d]'), '');
+                                  launchUrl(Uri.parse('https://wa.me/$digits'),
+                                      mode: LaunchMode.externalApplication);
+                                },
+                                icon: const Icon(Icons.chat,
+                                    color: Color(0xFF25D366), size: 18),
+                                label: const Text('WhatsApp',
+                                    style: TextStyle(color: Color(0xFF25D366))),
+                                style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(
+                                        color: Color(0xFF25D366)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(6))),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     )
                   ] else if (isPending) ...[

@@ -19,8 +19,10 @@ async function notifyUser(userId, title, body, type) {
   });
 
   const userDoc = await db.collection("users").doc(userId).get();
-  const token = userDoc.data()?.fcmToken;
-  if (token) {
+  const userData = userDoc.data();
+  const token = userData?.fcmToken;
+  const pushEnabled = userData?.pushEnabled !== false; // default true
+  if (token && pushEnabled) {
     try {
       await admin.messaging().send({
         token,

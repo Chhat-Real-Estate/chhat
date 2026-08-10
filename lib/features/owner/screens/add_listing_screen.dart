@@ -349,7 +349,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   if (_propertyKind == 'commercial') ...[
                     ListingInputField(
                         controller: _builtUpAreaController,
-                        hint: 'Built-up Area (sqft)',
+                        hint: 'Built-up Area (sqft) (Optional)',
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -357,7 +357,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _superBuiltUpAreaController,
-                        hint: 'Super Built-up Area (sqft)',
+                        hint: 'Super Built-up Area (sqft) (Optional)',
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -365,7 +365,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _plotAreaController,
-                        hint: 'Plot Area (sqft)',
+                        hint: 'Plot Area (sqft) (Optional)',
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -373,7 +373,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _totalFloorsController,
-                        hint: 'Total Floors in Building',
+                        hint: 'Total Floors in Building (Optional)',
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
@@ -381,19 +381,19 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _ceilingHeightController,
-                        hint: 'Ceiling Height (ft)',
+                        hint: 'Ceiling Height (ft) (Optional)',
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true)),
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _frontageController,
-                        hint: 'Frontage (ft)',
+                        hint: 'Frontage (ft) (Optional)',
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true)),
                     const SizedBox(height: 12),
                     ListingInputField(
                         controller: _roadWidthController,
-                        hint: 'Road Width (ft)',
+                        hint: 'Road Width (ft) (Optional)',
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true)),
                   ],
@@ -401,14 +401,16 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   const ListingSectionTitle(title: 'Facilities'),
                   const SizedBox(height: 12),
                   ListingMultiChipSelector(
-                    options: const [
-                      'Furnished',
+                    options: [
+                      if (_propertyKind != 'commercial') 'Furnished',
                       'Attached Toilet',
                       'Shared Toilet',
                       'Water Supply - Indoor',
                       'Water Supply - Outdoor',
                       'WiFi',
-                      'Cooking Allowed'
+                      _propertyKind == 'commercial'
+                          ? 'Canteen'
+                          : 'Cooking Allowed',
                     ],
                     selected: _selectedFacilities,
                     onChanged: (val) =>

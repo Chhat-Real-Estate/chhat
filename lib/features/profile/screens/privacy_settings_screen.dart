@@ -14,6 +14,7 @@ class PrivacySettingsScreen extends StatefulWidget {
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _isLoading = true;
   bool _consentActive = true;
+  bool _pushEnabled = true;
   String? _userId;
 
   @override
@@ -38,6 +39,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
             _consentActive = doc.data()!.containsKey('consentActive')
                 ? doc.data()!['consentActive']
                 : true;
+            _pushEnabled = doc.data()!.containsKey('pushEnabled')
+                ? doc.data()!['pushEnabled']
+                : true;
             _isLoading = false;
           });
         }
@@ -61,6 +65,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           backgroundColor: value ? Colors.green : Colors.orange,
         ));
       }
+    }
+  }
+
+  Future<void> _togglePush(bool value) async {
+    setState(() => _pushEnabled = value);
+    if (_userId != null) {
+      await FirebaseFirestore.instance.collection('users').doc(_userId).update({
+        'pushEnabled': value,
+      });
     }
   }
 
@@ -211,6 +224,28 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                           style: TextStyle(fontSize: 12, color: Colors.grey)),
                       value: _consentActive,
                       onChanged: _toggleConsent,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300)),
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: const Color(0xFF2D6A4F),
+                      title: const Text('Push Notifications',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      subtitle: const Text(
+                          'Phone ki notification tray me alerts band/chalu karo. In-app notifications hamesha milte rahenge.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      value: _pushEnabled,
+                      onChanged: _togglePush,
                     ),
                   ),
                   const SizedBox(height: 24),

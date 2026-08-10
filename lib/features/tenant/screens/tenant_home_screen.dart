@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../services/push_notification_service.dart';
 import 'find_room_screen.dart';
 import 'tenant_profile_tab.dart';
 import 'tenant_requests_screen.dart';
@@ -10,15 +12,30 @@ const Color _cherryRed = Color(0xFFC62828);
 const Color _cherryLight = Color(0xFFEF5350);
 
 class TenantHomeScreen extends StatefulWidget {
-  const TenantHomeScreen({super.key});
+  final int initialTab;
+  const TenantHomeScreen({super.key, this.initialTab = 0});
 
   @override
   State<TenantHomeScreen> createState() => _TenantHomeScreenState();
 }
 
 class _TenantHomeScreenState extends State<TenantHomeScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex = widget.initialTab;
   DateTime? _lastBackPress;
+
+  @override
+  void initState() {
+    super.initState();
+    // FIX: Ye function pehle kahin call hi nahi ho raha tha, isliye app
+    // kabhi notification permission maangti hi nahi thi aur FCM token bhi
+    // save nahi hota tha.
+    SharedPreferences.getInstance().then((prefs) {
+      final userId = prefs.getString('userId');
+      if (userId != null && userId.isNotEmpty) {
+        PushNotificationService.init(userId);
+      }
+    });
+  }
 
   late final List<Widget> _pages = [
     const FindRoomScreen(),

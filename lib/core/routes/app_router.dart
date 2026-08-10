@@ -112,13 +112,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // --- MAIN HOME SCREENS ---
       GoRoute(
         path: '/owner-home',
-        pageBuilder: (context, state) => const NoTransitionPage(
-          child: OwnerHomeScreen(), // FIX: Ab ye OwnerHomeScreen load karega
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: OwnerHomeScreen(
+              initialTab: state.extra is int ? state.extra as int : 0),
         ),
       ),
       GoRoute(
         path: '/tenant-home',
-        builder: (context, state) => const TenantHomeScreen(),
+        builder: (context, state) => TenantHomeScreen(
+            initialTab: state.extra is int ? state.extra as int : 0),
       ),
 
       // --- SUB SCREENS ---
