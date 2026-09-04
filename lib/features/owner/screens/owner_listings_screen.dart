@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../listings/models/listing_model.dart';
 import '../../listings/repositories/listing_repository.dart';
 import '../widgets/owner_listing_card.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/empty_state_view.dart';
 
 const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
@@ -50,29 +52,33 @@ class _OwnerListingsScreenState extends State<OwnerListingsScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: userId == null
-          ? const Center(child: CircularProgressIndicator(color: _blueDark))
+          ? ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 3,
+              itemBuilder: (context, index) => const AppSkeletonListingCard(),
+            )
           : StreamBuilder<List<ListingModel>>(
               stream: _listingsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(color: _blueDark));
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: 3,
+                    itemBuilder: (context, index) =>
+                        const AppSkeletonListingCard(),
+                  );
                 }
                 final listings = snapshot.data ?? [];
 
                 if (listings.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.home_outlined,
-                            size: 80, color: Color(0xFFCCCCCC)),
-                        SizedBox(height: 16),
-                        Text('Abhi koi listing nahi hai',
-                            style: TextStyle(
-                                fontSize: 18, color: Color(0xFF999999))),
-                      ],
-                    ),
+                  return EmptyStateView(
+                    icon: Icons.home_work_outlined,
+                    title: 'Abhi koi listing nahi hai',
+                    subtitle:
+                        'Apna pehla kamra list karein aur verified tenants se direct judiye.',
+                    buttonText: 'Naya Room Add Karein',
+                    themeColor: _blueDark,
+                    onButtonPressed: () => context.push('/add-listing'),
                   );
                 }
 

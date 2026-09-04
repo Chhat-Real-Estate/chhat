@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/listing_results.dart';
 import '../../notifications/widgets/notification_bell_icon.dart';
@@ -127,35 +127,34 @@ class _FindRoomScreenState extends State<FindRoomScreen> {
       final userId = prefs.getString('userId');
       if (userId == null) return;
 
-      await FirebaseFirestore.instance
-          .collection('tenantProfiles')
-          .doc(userId)
-          .get();
+      final data = await Supabase.instance.client
+          .from('tenant_profiles')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (!mounted) return;
+      if (!mounted || data == null) return;
 
-      /* if (doc.exists) {
-        final data = doc.data()!;
-        setState(() {
-          final reqs = List<String>.from(data['propertyRequirements'] ?? []);
-          if (reqs.isNotEmpty) _filterPropCat = reqs.first;
+      setState(() {
+        final reqs = List<String>.from(
+            (data['property_requirements'] ?? data['propertyRequirements']) ??
+                []);
+        if (reqs.isNotEmpty) _filterPropCat = reqs.first;
 
-          /* final tType = data['tenantType'] as String?;
-          if (tType != null && tType.isNotEmpty) _filterTenantType = tType;*/
-
-          final budget = data['budgetRange'] as String?;
-           if (budget == 'Below ₹5,000')
-            _rentRange = const RangeValues(1000, 5000);
-          else if (budget == '₹5,000 - ₹10,000')
-            _rentRange = const RangeValues(5000, 10000);
-          else if (budget == '₹10,000 - ₹15,000')
-            _rentRange = const RangeValues(10000, 15000);
-          else if (budget == '₹15,000 - ₹20,000')
-            _rentRange = const RangeValues(15000, 20000);
-          else if (budget == 'Above ₹20,000')
-            _rentRange = const RangeValues(20000, 30000); 
-        });
-      } */
+        final budget =
+            (data['budget_range'] ?? data['budgetRange']) as String?;
+        if (budget == 'Below ₹5,000') {
+          _rentRange = const RangeValues(1000, 5000);
+        } else if (budget == '₹5,000 - ₹10,000') {
+          _rentRange = const RangeValues(5000, 10000);
+        } else if (budget == '₹10,000 - ₹15,000') {
+          _rentRange = const RangeValues(10000, 15000);
+        } else if (budget == '₹15,000 - ₹20,000') {
+          _rentRange = const RangeValues(15000, 20000);
+        } else if (budget == 'Above ₹20,000') {
+          _rentRange = const RangeValues(20000, 30000);
+        }
+      });
     } catch (e) {
       debugPrint("Smart Filter Error: $e");
     }

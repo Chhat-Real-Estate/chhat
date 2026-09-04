@@ -40,12 +40,20 @@ class _SplashScreenState extends State<SplashScreen> {
             .maybeSingle();
 
         if (!mounted) return;
-        if (data != null && data['profile_complete'] == true) {
-          final role = data['active_role'];
-          if (role != null && role.toString().isNotEmpty) {
-            context.go('/$role-home');
-            return;
-          }
+        final isComplete = data != null && data['profile_complete'] == true;
+        final role = data?['active_role']?.toString();
+
+        await prefs.setBool('profileComplete', isComplete);
+        if (role != null && role.isNotEmpty) {
+          await prefs.setString('userRole', role);
+        }
+
+        if (isComplete && role != null && role.isNotEmpty) {
+          context.go('/$role-home');
+          return;
+        } else if (role != null && role.isNotEmpty) {
+          context.go('/$role-onboarding');
+          return;
         }
       } catch (_) {}
       if (!mounted) return;

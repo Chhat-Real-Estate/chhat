@@ -9,6 +9,8 @@ import '../widgets/owner_filter_panel.dart';
 import '../../notifications/widgets/notification_bell_icon.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/app_exceptions.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/empty_state_view.dart';
 
 const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
@@ -148,8 +150,11 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                   .eq('is_profile_complete', true),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(color: _blueDark));
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: 4,
+                    itemBuilder: (context, index) => const AppSkeletonTile(),
+                  );
                 }
                 var docs = snapshot.data ?? [];
 
@@ -179,9 +184,21 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                 }
 
                 if (docs.isEmpty) {
-                  return const Center(
-                      child: Text('Koi tenant match nahi hua.',
-                          style: TextStyle(color: Colors.grey, fontSize: 16)));
+                  return EmptyStateView(
+                    icon: Icons.person_search_outlined,
+                    title: 'Koi Tenant Match Nahi Hua',
+                    subtitle:
+                        'Aapne jo filters chune hain unse match karta koi tenant nahi mila. Filters reset karein ya area badal kar dekhein.',
+                    buttonText: 'Reset Filters',
+                    themeColor: _blueDark,
+                    onButtonPressed: () {
+                      setState(() {
+                        _filterType = 'All Tenants';
+                        _filterBudget = 'All Budgets';
+                        _filterMoveIn = 'Any Move-in';
+                      });
+                    },
+                  );
                 }
 
                 return ListView.builder(

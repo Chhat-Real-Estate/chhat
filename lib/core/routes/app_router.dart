@@ -32,15 +32,43 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLoggedIn = AuthService.isLoggedIn ||
           FirebaseAuth.instance.currentUser != null;
       const publicPaths = ['/', '/phone', '/otp', '/privacy-policy'];
-      final isPublic = publicPaths.contains(state.matchedLocation);
+      final loc = state.matchedLocation;
+      final isPublic = publicPaths.contains(loc);
 
-      if (!isLoggedIn && !isPublic) {
-        return '/phone';
+      // 1. Agar logged in nahi hai: sirf public paths allowed hain
+      if (!isLoggedIn) {
+        return isPublic ? null : '/phone';
       }
 
-      // Agar already logged in hai aur phone/otp screen khol raha hai, root pe bhej do
-      if (isLoggedIn && (state.matchedLocation == '/phone' || state.matchedLocation == '/otp')) {
-        return '/';
+      // 2. Agar logged in hai
+      final isComplete = AuthService.isProfileComplete;
+      final role = AuthService.userRole;
+      const onboardingPaths = ['/role', '/owner-onboarding', '/tenant-onboarding'];
+      final isOnboarding = onboardingPaths.contains(loc);
+
+      // Agar phone/otp par aane ki koshish kare
+      if (loc == '/phone' || loc == '/otp') {
+        if (!isComplete) {
+          if (role == 'owner') return '/owner-onboarding';
+          if (role == 'tenant') return '/tenant-onboarding';
+          return '/role';
+        }
+        return (role == 'owner') ? '/owner-home' : '/tenant-home';
+      }
+
+      // 3. Incomplete profile guard: deep-link bypass rokna
+      if (!isComplete) {
+        if (isPublic || isOnboarding) {
+          return null;
+        }
+        if (role == 'owner') return '/owner-onboarding';
+        if (role == 'tenant') return '/tenant-onboarding';
+        return '/role';
+      }
+
+      // 4. Completed profile trying to visit onboarding again
+      if (isComplete && isOnboarding) {
+        return (role == 'owner') ? '/owner-home' : '/tenant-home';
       }
 
       return null;

@@ -36,6 +36,121 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
   String _selectedGender = '';
   bool _isFetchingLocation = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndRestoreDraft();
+    });
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('tenant_draft_exists', true);
+      await prefs.setInt('tenant_draft_step', _currentPage);
+      await prefs.setString('tenant_draft_name', _nameController.text);
+      await prefs.setString('tenant_draft_age', _ageController.text);
+      await prefs.setString('tenant_draft_city', _cityController.text);
+      await prefs.setString('tenant_draft_area', _areaController.text);
+      await prefs.setString('tenant_draft_sub_area', _subAreaController.text);
+      await prefs.setString('tenant_draft_property_kind', _propertyKind);
+      await prefs.setString('tenant_draft_tenant_type', _tenantType);
+      await prefs.setString('tenant_draft_occupation', _occupation);
+      await prefs.setStringList('tenant_draft_property_req', _propertyReq);
+      await prefs.setString('tenant_draft_move_in', _moveIn);
+      await prefs.setString('tenant_draft_budget_range', _budgetRange);
+      await prefs.setString('tenant_draft_gender', _selectedGender);
+    } catch (e) {
+      debugPrint('Error saving tenant draft: $e');
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('tenant_draft_')).toList();
+      for (final k in keys) {
+        await prefs.remove(k);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkAndRestoreDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasDraft = prefs.getBool('tenant_draft_exists') ?? false;
+    final savedStep = prefs.getInt('tenant_draft_step') ?? 0;
+    final draftName = prefs.getString('tenant_draft_name') ?? '';
+
+    if (!hasDraft && savedStep == 0 && draftName.isEmpty) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    final shouldResume = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.history_rounded, color: Color(0xFFC62828)),
+            SizedBox(width: 8),
+            Text('Resume Form?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'Adhoora form mila, wahin se continue karein?',
+          style: TextStyle(fontSize: 15, color: Color(0xFF444444)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nahi, Naya Shuru Karein', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Haan, Continue Karein', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldResume == true) {
+      setState(() {
+        _nameController.text = prefs.getString('tenant_draft_name') ?? _nameController.text;
+        _ageController.text = prefs.getString('tenant_draft_age') ?? '';
+        _cityController.text = prefs.getString('tenant_draft_city') ?? '';
+        _areaController.text = prefs.getString('tenant_draft_area') ?? '';
+        _subAreaController.text = prefs.getString('tenant_draft_sub_area') ?? '';
+        _propertyKind = prefs.getString('tenant_draft_property_kind') ?? _propertyKind;
+        _tenantType = prefs.getString('tenant_draft_tenant_type') ?? _tenantType;
+        _occupation = prefs.getString('tenant_draft_occupation') ?? _occupation;
+        _propertyReq = prefs.getStringList('tenant_draft_property_req') ?? _propertyReq;
+        _moveIn = prefs.getString('tenant_draft_move_in') ?? _moveIn;
+        _budgetRange = prefs.getString('tenant_draft_budget_range') ?? _budgetRange;
+        _selectedGender = prefs.getString('tenant_draft_gender') ?? _selectedGender;
+
+        final targetPage = savedStep.clamp(0, _totalPages - 1);
+        _currentPage = targetPage;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentPage);
+        }
+      });
+    } else {
+      await _clearDraft();
+    }
+  }
+
   List<Map<String, dynamic>> get _stepTitles {
     return [
       {'title': 'Your Details', 'icon': Icons.person_pin_circle_outlined},
@@ -89,11 +204,13 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
     }
 
     if (_currentPage < _totalPages - 1) {
+      _saveDraft();
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } else {
+      _saveDraft();
       _submitForm();
     }
   }
@@ -154,6 +271,10 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
       // Cache update
       await prefs.setString('userName', _nameController.text.trim());
       await prefs.setString('userRole', 'tenant');
+      await prefs.setBool('profileComplete', true);
+
+      // Clear local draft
+      await _clearDraft();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -225,6 +346,8 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
                   'updated_at': DateTime.now().toIso8601String(),
                 }).eq('id', userId);
                 await prefs.setString('userRole', 'tenant');
+                await prefs.setBool('profileComplete', true);
+                await _clearDraft();
               } catch (_) {}
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -411,6 +534,7 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () {
                           if (_currentPage > 0) {
+                            _saveDraft();
                             _pageController.previousPage(
                               duration: const Duration(milliseconds: 300),
                               curve: Curves.easeInOut,
@@ -476,7 +600,10 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) => setState(() => _currentPage = index),
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                  _saveDraft();
+                },
                 children: _buildPages(),
               ),
             ),

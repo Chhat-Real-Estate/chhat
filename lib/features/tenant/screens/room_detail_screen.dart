@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart'; // NAYA: Mouse drag support ke liye
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../features/listings/models/listing_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../features/reports/repositories/report_repository.dart';
+import '../../../shared/widgets/app_skeleton.dart';
 
 class RoomDetailScreen extends StatefulWidget {
   final ListingModel listing;
@@ -19,21 +19,27 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   bool _requestSent = false;
   bool _loading = false;
   int _currentPhoto = 0;
-  late Future<DocumentSnapshot> _roomFuture;
+  late Future<Map<String, dynamic>?> _roomFuture;
   final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
-    // FIX: Data ek hi baar load hoga, setState par refresh nahi hoga
-    _roomFuture = FirebaseFirestore.instance
-        .collection('listings')
-        .doc(widget.listing.id)
-        .get();
-    FirebaseFirestore.instance
-        .collection('listings')
-        .doc(widget.listing.id)
-        .update({'views': FieldValue.increment(1)}).catchError((_) {});
+    final listingId = widget.listing.id;
+    if (listingId != null && listingId.isNotEmpty) {
+      _roomFuture = Supabase.instance.client
+          .from('listings')
+          .select()
+          .eq('id', listingId)
+          .maybeSingle();
+
+      // Supabase views increment
+      Supabase.instance.client
+          .rpc('increment_views', params: {'listing_id': listingId})
+          .catchError((_) {});
+    } else {
+      _roomFuture = Future.value(widget.listing.toMap());
+    }
   }
 
   @override
@@ -290,10 +296,60 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
     }
   }
 
-  String _formatDate(Timestamp? ts) {
-    if (ts == null) return 'N/A';
-    final d = ts.toDate();
-    return '${d.day}/${d.month}/${d.year}';
+  String _formatDate(dynamic val) {
+    if (val == null) return 'N/A';
+    if (val is DateTime) return '${val.day}/${val.month}/${val.year}';
+    final parsed = DateTime.tryParse(val.toString());
+    if (parsed != null) return '${parsed.day}/${parsed.month}/${parsed.year}';
+    return val.toString();
+  }
+
+  Widget _buildDetailSkeleton() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AppSkeleton(
+            height: 260,
+            width: double.infinity,
+            borderRadius: BorderRadius.zero,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    AppSkeleton(width: 140, height: 28),
+                    AppSkeleton(width: 80, height: 24),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const AppSkeleton(width: 240, height: 18),
+                const SizedBox(height: 8),
+                const AppSkeleton(width: 160, height: 14),
+                const SizedBox(height: 24),
+                Row(
+                  children: const [
+                    Expanded(child: AppSkeleton(height: 48)),
+                    SizedBox(width: 12),
+                    Expanded(child: AppSkeleton(height: 48)),
+                    SizedBox(width: 12),
+                    Expanded(child: AppSkeleton(height: 48)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const AppSkeleton(width: 120, height: 20),
+                const SizedBox(height: 12),
+                const AppSkeleton(height: 80, width: double.infinity),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -321,49 +377,56 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 18)),
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: _roomFuture, // FIX: Caching used
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _roomFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFFC62828)));
-          if (!snapshot.hasData || !snapshot.data!.exists)
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildDetailSkeleton();
+          }
+          final data = snapshot.data;
+          if (data == null) {
             return const Center(child: Text('Room data nahi mila'));
-
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+          }
 
           final photos = List<String>.from(data['photos'] ?? []);
           final rent = data['rent'] ?? 0;
           final deposit = data['deposit'] ?? 0;
           final area = data['area'] ?? '';
-          final subArea = data['subArea'] ?? '';
+          final subArea = (data['sub_area'] ?? data['subArea']) ?? '';
           final city = data['city'] ?? '';
           final landmark = data['landmark'] ?? '';
-          final size = data['sizeSqft'] ?? 0;
+          final size = (data['size_sqft'] ?? data['sizeSqft']) ?? 0;
           final floor = data['floor'] ?? '';
           final occupancy = data['occupancy'] ?? 0;
-          final distance = data['distanceKm'] ?? 0;
+          final distance = (data['distance_km'] ?? data['distanceKm']) ?? 0;
           final availability = data['availability'] ?? '';
-          final createdAt = _formatDate(data['createdAt'] as Timestamp?);
+          final createdAt = _formatDate(data['created_at'] ?? data['createdAt']);
 
           final facilities = List<String>.from(data['facilities'] ?? []);
-          final tenants = List<String>.from(data['allowedTenants'] ?? []);
+          final tenants = List<String>.from(
+              (data['allowed_tenants'] ?? data['allowedTenants']) ?? []);
           final restrictions = List<String>.from(data['restrictions'] ?? []);
 
-          final propertyKind = data['propertyKind'] ?? 'residential';
+          final propertyKind =
+              (data['property_kind'] ?? data['propertyKind']) ?? 'residential';
           final isCommercial = propertyKind == 'commercial';
-          final furnishingStatus = data['furnishingStatus'] ?? '';
-          final rawParkingType = data['parkingType'];
+          final furnishingStatus =
+              (data['furnishing_status'] ?? data['furnishingStatus']) ?? '';
+          final rawParkingType = data['parking_type'] ?? data['parkingType'];
           final parkingTypeList = rawParkingType is List
               ? List<String>.from(rawParkingType)
               : (rawParkingType is String && rawParkingType.isNotEmpty
                   ? [rawParkingType]
                   : <String>[]);
-          final builtUpArea = data['builtUpArea'] ?? '';
-          final suitableFor = List<String>.from(data['suitableFor'] ?? []);
+          final builtUpArea =
+              (data['built_up_area'] ?? data['builtUpArea']) ?? '';
+          final suitableFor = List<String>.from(
+              (data['suitable_for'] ?? data['suitableFor']) ?? []);
           final utilities = List<String>.from(data['utilities'] ?? []);
-          final buildingGrade = data['buildingGrade'] ?? '';
-          final buildingAge = data['buildingAge'] ?? '';
+          final buildingGrade =
+              (data['building_grade'] ?? data['buildingGrade']) ?? '';
+          final buildingAge =
+              (data['building_age'] ?? data['buildingAge']) ?? '';
           final possession = data['possession'] ?? '';
           final ownership = data['ownership'] ?? '';
           final visibility = List<String>.from(data['visibility'] ?? []);

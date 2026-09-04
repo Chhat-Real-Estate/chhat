@@ -79,6 +79,9 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
   void initState() {
     super.initState();
     _loadPhoneNumber();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndRestoreDraft();
+    });
   }
 
   // FIX: Pehle field hardcoded "9876543210" dikhata tha — ab asli verified
@@ -88,6 +91,169 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
     final phone = prefs.getString('userPhone') ?? '';
     if (mounted) {
       setState(() => _phoneController.text = phone);
+    }
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('owner_draft_exists', true);
+      await prefs.setInt('owner_draft_step', _currentPage);
+      await prefs.setString('owner_draft_name', _nameController.text);
+      await prefs.setString('owner_draft_phone', _phoneController.text);
+      await prefs.setString('owner_draft_city', _cityController.text);
+      await prefs.setString('owner_draft_area', _areaController.text);
+      await prefs.setString('owner_draft_sub_area', _subAreaController.text);
+      await prefs.setString('owner_draft_landmark', _landmarkController.text);
+      await prefs.setString('owner_draft_distance', _distanceController.text);
+      await prefs.setString('owner_draft_rent', _rentController.text);
+      await prefs.setString('owner_draft_deposit', _depositController.text);
+      await prefs.setString('owner_draft_size', _sizeController.text);
+      await prefs.setString('owner_draft_floor', _floorController.text);
+      await prefs.setString('owner_draft_occupancy', _occupancyController.text);
+      await prefs.setString('owner_draft_built_up_area', _builtUpAreaController.text);
+      await prefs.setString('owner_draft_super_built_up_area', _superBuiltUpAreaController.text);
+      await prefs.setString('owner_draft_plot_area', _plotAreaController.text);
+      await prefs.setString('owner_draft_total_floors', _totalFloorsController.text);
+      await prefs.setString('owner_draft_ceiling_height', _ceilingHeightController.text);
+      await prefs.setString('owner_draft_frontage', _frontageController.text);
+      await prefs.setString('owner_draft_road_width', _roadWidthController.text);
+
+      await prefs.setString('owner_draft_property_kind', _propertyKind);
+      await prefs.setString('owner_draft_property_category', _propertyCategory);
+      await prefs.setString('owner_draft_furnishing_status', _furnishingStatus);
+      await prefs.setString('owner_draft_parking_type', _parkingType);
+      await prefs.setString('owner_draft_availability', _availability);
+
+      await prefs.setString('owner_draft_building_grade', _buildingGrade);
+      await prefs.setString('owner_draft_building_age', _buildingAge);
+      await prefs.setString('owner_draft_possession', _possession);
+      await prefs.setString('owner_draft_ownership', _ownership);
+
+      await prefs.setStringList('owner_draft_suitable_for', _suitableFor);
+      await prefs.setStringList('owner_draft_utilities', _utilities);
+      await prefs.setStringList('owner_draft_visibility', _visibility);
+      await prefs.setStringList('owner_draft_selected_facilities', _selectedFacilities);
+      await prefs.setStringList('owner_draft_selected_tenants', _selectedTenants);
+      await prefs.setStringList('owner_draft_selected_restrictions', _selectedRestrictions);
+    } catch (e) {
+      debugPrint('Error saving owner draft: $e');
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('owner_draft_')).toList();
+      for (final k in keys) {
+        await prefs.remove(k);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkAndRestoreDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasDraft = prefs.getBool('owner_draft_exists') ?? false;
+    final savedStep = prefs.getInt('owner_draft_step') ?? 0;
+    final draftName = prefs.getString('owner_draft_name') ?? '';
+
+    if (!hasDraft && savedStep == 0 && draftName.isEmpty) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    final shouldResume = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.history_rounded, color: Color(0xFF1A237E)),
+            SizedBox(width: 8),
+            Text('Resume Form?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'Adhoora form mila, wahin se continue karein?',
+          style: TextStyle(fontSize: 15, color: Color(0xFF444444)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nahi, Naya Shuru Karein', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Haan, Continue Karein', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldResume == true) {
+      setState(() {
+        _nameController.text = prefs.getString('owner_draft_name') ?? _nameController.text;
+        _phoneController.text = prefs.getString('owner_draft_phone') ?? _phoneController.text;
+        _cityController.text = prefs.getString('owner_draft_city') ?? '';
+        _areaController.text = prefs.getString('owner_draft_area') ?? '';
+        _subAreaController.text = prefs.getString('owner_draft_sub_area') ?? '';
+        _landmarkController.text = prefs.getString('owner_draft_landmark') ?? '';
+        _distanceController.text = prefs.getString('owner_draft_distance') ?? '';
+        _rentController.text = prefs.getString('owner_draft_rent') ?? '';
+        _depositController.text = prefs.getString('owner_draft_deposit') ?? '';
+        _sizeController.text = prefs.getString('owner_draft_size') ?? '';
+        _floorController.text = prefs.getString('owner_draft_floor') ?? '';
+        _occupancyController.text = prefs.getString('owner_draft_occupancy') ?? '';
+        _builtUpAreaController.text = prefs.getString('owner_draft_built_up_area') ?? '';
+        _superBuiltUpAreaController.text = prefs.getString('owner_draft_super_built_up_area') ?? '';
+        _plotAreaController.text = prefs.getString('owner_draft_plot_area') ?? '';
+        _totalFloorsController.text = prefs.getString('owner_draft_total_floors') ?? '';
+        _ceilingHeightController.text = prefs.getString('owner_draft_ceiling_height') ?? '';
+        _frontageController.text = prefs.getString('owner_draft_frontage') ?? '';
+        _roadWidthController.text = prefs.getString('owner_draft_road_width') ?? '';
+
+        _propertyKind = prefs.getString('owner_draft_property_kind') ?? _propertyKind;
+        _propertyCategory = prefs.getString('owner_draft_property_category') ?? _propertyCategory;
+        _furnishingStatus = prefs.getString('owner_draft_furnishing_status') ?? _furnishingStatus;
+        _parkingType = prefs.getString('owner_draft_parking_type') ?? _parkingType;
+        _availability = prefs.getString('owner_draft_availability') ?? _availability;
+
+        _buildingGrade = prefs.getString('owner_draft_building_grade') ?? _buildingGrade;
+        _buildingAge = prefs.getString('owner_draft_building_age') ?? _buildingAge;
+        _possession = prefs.getString('owner_draft_possession') ?? _possession;
+        _ownership = prefs.getString('owner_draft_ownership') ?? _ownership;
+
+        _suitableFor = prefs.getStringList('owner_draft_suitable_for') ?? _suitableFor;
+        _utilities = prefs.getStringList('owner_draft_utilities') ?? _utilities;
+        _visibility = prefs.getStringList('owner_draft_visibility') ?? _visibility;
+
+        _selectedFacilities.clear();
+        _selectedFacilities.addAll(prefs.getStringList('owner_draft_selected_facilities') ?? []);
+
+        _selectedTenants.clear();
+        _selectedTenants.addAll(prefs.getStringList('owner_draft_selected_tenants') ?? []);
+
+        _selectedRestrictions.clear();
+        _selectedRestrictions.addAll(prefs.getStringList('owner_draft_selected_restrictions') ?? []);
+
+        final targetPage = savedStep.clamp(0, _totalPages - 1);
+        _currentPage = targetPage;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentPage);
+        }
+      });
+    } else {
+      await _clearDraft();
     }
   }
 
@@ -186,12 +352,24 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
   void _nextPage() {
     final currentTitle = _stepTitles[_currentPage]['title'];
 
-    if (currentTitle == 'Owner Details' &&
-        _nameController.text.trim().length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Enter a valid name'),
-          backgroundColor: Color(0xFF1A237E)));
-      return;
+    if (currentTitle == 'Owner Details') {
+      if (_nameController.text.trim().length < 3) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Enter a valid name'),
+            backgroundColor: Color(0xFF1A237E)));
+        return;
+      }
+      String cleanPhone =
+          _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+      if (cleanPhone.length > 10) {
+        cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
+      }
+      if (cleanPhone.length != 10) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Sahi 10 digit ka mobile number daalo'),
+            backgroundColor: Color(0xFF1A237E)));
+        return;
+      }
     }
     if (currentTitle == 'Property Category' && _propertyCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -199,11 +377,38 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
           backgroundColor: Color(0xFF1A237E)));
       return;
     }
+    if (currentTitle == 'Pricing') {
+      final rent = int.tryParse(_rentController.text.trim()) ?? 0;
+      final deposit = int.tryParse(_depositController.text.trim()) ?? 0;
+      if (rent <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Rent 0 se zyada hona chahiye'),
+            backgroundColor: Color(0xFF1A237E)));
+        return;
+      }
+      if (deposit < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Deposit 0 ya usse zyada hona chahiye'),
+            backgroundColor: Color(0xFF1A237E)));
+        return;
+      }
+    }
+    if (currentTitle == 'Property Details') {
+      final size = int.tryParse(_sizeController.text.trim()) ?? 0;
+      if (size <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Property size (sqft) 0 se zyada hona chahiye'),
+            backgroundColor: Color(0xFF1A237E)));
+        return;
+      }
+    }
 
     if (_currentPage < _totalPages - 1) {
+      _saveDraft();
       _pageController.nextPage(
           duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     } else {
+      _saveDraft();
       _submitForm();
     }
   }
@@ -221,9 +426,11 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
 
       String rawPhone =
           prefs.getString('userPhone') ?? _phoneController.text.trim();
-      if (!rawPhone.startsWith('+91')) {
-        rawPhone = '+91$rawPhone';
+      String cleanPhone = rawPhone.replaceAll(RegExp(r'\D'), '');
+      if (cleanPhone.length > 10) {
+        cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
       }
+      rawPhone = '+91$cleanPhone';
 
       // 1. Users table update karo
       await supabase.from('users').update({
@@ -289,6 +496,7 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
       await prefs.setString('userName', _nameController.text.trim());
       await prefs.setString('userRole', 'owner');
       await prefs.setString('userPhone', rawPhone);
+      await prefs.setBool('profileComplete', true);
 
       // Upload photos to Supabase Storage
       final storage = StorageDatasource();
@@ -311,6 +519,9 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
             .from('listings')
             .update({'photos': uploadedUrls}).eq('id', newListingId);
       }
+
+      // Clear local draft upon successful submission
+      await _clearDraft();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -386,6 +597,8 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
                   'updated_at': DateTime.now().toIso8601String(),
                 }).eq('id', userId);
                 await prefs.setString('userRole', 'owner');
+                await prefs.setBool('profileComplete', true);
+                await _clearDraft();
               } catch (_) {}
               if (mounted) context.go('/owner-home');
             },
@@ -529,6 +742,7 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () {
                           if (_currentPage > 0) {
+                            _saveDraft();
                             _pageController.previousPage(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeInOut);
@@ -590,7 +804,10 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) => setState(() => _currentPage = index),
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                  _saveDraft();
+                },
                 children: _buildPages(),
               ),
             ),

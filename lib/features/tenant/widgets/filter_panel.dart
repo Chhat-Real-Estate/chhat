@@ -68,7 +68,7 @@ class _FilterPanelState extends State<FilterPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Property Category',
+                  const Text('Property Category (Room Type)',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -83,8 +83,8 @@ class _FilterPanelState extends State<FilterPanel> {
                   const Divider(height: 24),
                   Text(
                       _propertyKind == 'commercial'
-                          ? 'Suitable For'
-                          : 'Allowed Tenants',
+                          ? 'Suitable For (Kiske Liye)'
+                          : 'Kirayedar Type (Allowed Tenants)',
                       style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -105,7 +105,7 @@ class _FilterPanelState extends State<FilterPanel> {
                       selected: _tenantType,
                       onSelect: (val) => setState(() => _tenantType = val)),
                   const Divider(height: 24),
-                  const Text('Facilities (Toilet)',
+                  const Text('Bathroom Type (Attached / Shared)',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -119,7 +119,7 @@ class _FilterPanelState extends State<FilterPanel> {
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Monthly Rent Range',
+                        const Text('Mahine ka Kiraya (Monthly Rent)',
                             style: TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 14)),
                         Text(
@@ -139,7 +139,7 @@ class _FilterPanelState extends State<FilterPanel> {
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Deposit Amount Range',
+                        const Text('Deposit / Security (Aage ka Paisa)',
                             style: TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 14)),
                         Text(
@@ -173,28 +173,20 @@ class _FilterPanelState extends State<FilterPanel> {
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                         minimumSize: const Size(0, 50),
-                        side: const BorderSide(color: Color(0xFFC62828)),
+                        side: const BorderSide(color: Colors.grey),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12))),
-                    onPressed: () {
-                      setState(() {
-                        _propCat = '';
-                        _tenantType = '';
-                        _toilet = '';
-                        _rentRange = const RangeValues(_rentMin, _rentMax);
-                        _depositRange =
-                            const RangeValues(_depositMin, _depositMax);
-                      });
-                      widget.onApply(
-                          '',
-                          '',
-                          '',
-                          const RangeValues(_rentMin, _rentMax),
-                          const RangeValues(_depositMin, _depositMax));
-                    },
+                    onPressed: () => setState(() {
+                      _propCat = '';
+                      _tenantType = '';
+                      _toilet = '';
+                      _rentRange = const RangeValues(_rentMin, _rentMax);
+                      _depositRange =
+                          const RangeValues(_depositMin, _depositMax);
+                    }),
                     child: const Text('Reset',
                         style: TextStyle(
-                            color: Color(0xFFC62828),
+                            color: Colors.black87,
                             fontSize: 16,
                             fontWeight: FontWeight.bold)),
                   ),
@@ -210,7 +202,7 @@ class _FilterPanelState extends State<FilterPanel> {
                             borderRadius: BorderRadius.circular(12))),
                     onPressed: () => widget.onApply(_propCat, _tenantType,
                         _toilet, _rentRange, _depositRange),
-                    child: const Text('Apply Filters',
+                    child: const Text('Filters Lagayein',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -248,18 +240,20 @@ class FilterChips extends StatelessWidget {
           onTap: () => onSelect(isSelected ? '' : option),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 44),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: isSelected ? const Color(0xFFC62828) : Colors.white,
               border: Border.all(
                   color: isSelected
                       ? const Color(0xFFC62828)
                       : Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(option,
                 style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: isSelected ? Colors.white : Colors.black87)),
           ),

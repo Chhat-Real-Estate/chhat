@@ -347,19 +347,16 @@ class _OtpScreenState extends State<OtpScreen> {
         }
 
         await prefs.setString('userName', existingUser['name'] ?? '');
-        await prefs.setString(
-            'userRole', existingUser['active_role'] ?? 'tenant');
+        final role = existingUser['active_role'] ?? 'tenant';
+        final isComplete = existingUser['profile_complete'] == true;
+        await prefs.setString('userRole', role);
+        await prefs.setBool('profileComplete', isComplete);
 
         if (mounted) {
           setState(() => _loading = false);
 
-          if (existingUser['profile_complete'] == true) {
-            final role = existingUser['active_role'];
-            if (role != null && role.toString().isNotEmpty) {
-              context.go('/$role-home');
-            } else {
-              context.go('/role');
-            }
+          if (isComplete) {
+            context.go('/$role-home');
           } else {
             context.go('/role');
           }
@@ -370,6 +367,8 @@ class _OtpScreenState extends State<OtpScreen> {
         final consentGivenAt = consentGivenAtStr != null
             ? DateTime.parse(consentGivenAtStr)
             : DateTime.now();
+
+        await prefs.setBool('profileComplete', false);
 
         await supabase.from('users').insert({
           'id': uid,

@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
 import '../../../core/utils/app_exceptions.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/empty_state_view.dart';
 
 // NAYA: Skeleton Animation
 class _PulseSkeleton extends StatefulWidget {
@@ -64,10 +66,14 @@ class _TenantRequestsScreenState extends State<TenantRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     if (userId == null) {
-      return const Scaffold(
-          backgroundColor: Color(0xFFF5F7F2),
-          body: Center(
-              child: CircularProgressIndicator(color: Color(0xFFC62828))));
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F7F2),
+        body: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: 4,
+          itemBuilder: (context, index) => const AppSkeletonTile(),
+        ),
+      );
     }
     return DefaultTabController(
       length: 2,
@@ -226,9 +232,13 @@ class _TenantSentTabState extends State<_TenantSentTab> {
 
         var requests = snapshot.data ?? [];
         if (requests.isEmpty) {
-          return const Center(
-              child: Text('Aapne abhi tak koi request nahi bheji',
-                  style: TextStyle(color: Colors.grey)));
+          return const EmptyStateView(
+            icon: Icons.outbox_outlined,
+            title: 'Koi Request Nahi Bheji',
+            subtitle:
+                'Jab aap kisi room ke liye request bhejenge, toh uska status yahan dikhega.',
+            themeColor: Color(0xFFC62828),
+          );
         }
 
         return ListView.builder(
@@ -427,9 +437,13 @@ class _TenantIncomingTabState extends State<_TenantIncomingTab> {
 
         var requests = snapshot.data ?? [];
         if (requests.isEmpty) {
-          return const Center(
-              child: Text('Koi naya invite nahi aaya',
-                  style: TextStyle(color: Colors.grey)));
+          return const EmptyStateView(
+            icon: Icons.mark_email_read_outlined,
+            title: 'Koi Naya Invite Nahi Aaya',
+            subtitle:
+                'Jab koi makaan malik aapko room dekhne ka invite bhejega, toh wo yahan dikhega.',
+            themeColor: Color(0xFFC62828),
+          );
         }
 
         return ListView.builder(

@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
 import '../../../core/utils/app_exceptions.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/empty_state_view.dart';
 
 const Color _blueDark = Color(0xFF1A237E);
 const Color _blueLight = Color(0xFF3949AB);
@@ -86,7 +88,11 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
           ),
         ),
         body: userId == null
-            ? const Center(child: CircularProgressIndicator(color: _blueDark))
+            ? ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: 4,
+                itemBuilder: (context, index) => const AppSkeletonTile(),
+              )
             : TabBarView(
                 children: [
                   IncomingRequestsTab(userId: userId!),
@@ -220,9 +226,13 @@ class _IncomingRequestsTabState extends State<IncomingRequestsTab> {
 
         final requests = snapshot.data ?? [];
         if (requests.isEmpty) {
-          return const Center(
-              child: Text('Abhi koi active request nahi aayi',
-                  style: TextStyle(color: Colors.grey)));
+          return const EmptyStateView(
+            icon: Icons.mark_email_unread_outlined,
+            title: 'Koi Request Nahi Aayi',
+            subtitle:
+                'Jab koi kirayedar aapke room me interest dikhayega, toh uski request yahan dikhegi.',
+            themeColor: _blueDark,
+          );
         }
 
         return ListView.builder(
@@ -428,9 +438,13 @@ class _SentRequestsTabState extends State<SentRequestsTab> {
 
         final requests = snapshot.data ?? [];
         if (requests.isEmpty) {
-          return const Center(
-              child: Text('Aapne koi active invite nahi bheja hai.',
-                  style: TextStyle(color: Colors.grey)));
+          return const EmptyStateView(
+            icon: Icons.send_outlined,
+            title: 'Koi Invite Nahi Bheja',
+            subtitle:
+                'Aap tenants explore karke unhe directly room dekhne ka invite bhej sakte hain.',
+            themeColor: _blueDark,
+          );
         }
 
         return ListView.builder(

@@ -42,10 +42,10 @@ class RoleSelectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Define your role as room owner or room seeker',
+                  'Makaan Malik hain ya Kirayedar? Chunein:',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 15,
+                    color: Colors.white.withOpacity(0.95),
                   ),
                 ),
               ],
@@ -58,15 +58,15 @@ class RoleSelectionScreen extends StatelessWidget {
               children: [
                 _ThinRoleCard(
                   icon: Icons.vpn_key_outlined,
-                  title: 'I have Room (Owner)',
-                  subtitle: 'MAKAAN MALIK',
+                  title: 'Mere Paas Room Hai',
+                  subtitle: 'MAKAAN MALIK (Owner) • Kiraye par dena hai',
                   onTap: () => context.go('/owner-onboarding'),
                 ),
                 const SizedBox(height: 16),
                 _ThinRoleCard(
                   icon: Icons.person_search_outlined,
-                  title: 'I need Room (Tenant)',
-                  subtitle: 'KIRAYEDAR',
+                  title: 'Mujhe Room Chahiye',
+                  subtitle: 'KIRAYEDAR (Tenant) • Bina dalali ke room khojein',
                   onTap: () => context.go('/tenant-onboarding'),
                 ),
               ],

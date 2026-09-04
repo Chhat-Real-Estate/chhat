@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/notification_model.dart';
 import '../repositories/notification_repository.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/empty_state_view.dart';
 
 class NotificationsScreen extends StatelessWidget {
   final String userId;
@@ -62,11 +64,21 @@ class NotificationsScreen extends StatelessWidget {
             );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 5,
+              itemBuilder: (context, index) => const AppSkeletonTile(),
+            );
           }
           final items = snapshot.data ?? [];
           if (items.isEmpty) {
-            return const Center(child: Text('Koi notification nahi hai.'));
+            return const EmptyStateView(
+              icon: Icons.notifications_off_outlined,
+              title: 'Koi Notification Nahi Hai',
+              subtitle:
+                  'Aapke account aur requests se jude sabhi updates yahan dikhenge.',
+              themeColor: Color(0xFFC62828),
+            );
           }
           // NAYA: Organize — unread pehle, phir read (dono ke andar
           // naye-se-purane order preserve rehta hai).

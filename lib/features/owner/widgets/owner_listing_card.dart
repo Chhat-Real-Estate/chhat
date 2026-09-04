@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../listings/models/listing_model.dart';
 import '../../listings/repositories/listing_repository.dart';
@@ -243,16 +242,14 @@ class _OwnerFullListingCardState extends State<OwnerFullListingCard> {
                         const Icon(Icons.visibility_outlined,
                             size: 16, color: Colors.grey),
                         const SizedBox(width: 4),
-                        StreamBuilder<DocumentSnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('listings')
-                              .doc(widget.listing.id)
-                              .snapshots(),
+                        StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: Supabase.instance.client
+                              .from('listings')
+                              .stream(primaryKey: ['id'])
+                              .eq('id', widget.listing.id ?? ''),
                           builder: (context, snap) {
-                            final views = snap.hasData && snap.data!.exists
-                                ? ((snap.data!.data()
-                                        as Map<String, dynamic>?)?['views'] ??
-                                    0)
+                            final views = (snap.hasData && snap.data!.isNotEmpty)
+                                ? (snap.data!.first['views'] ?? 0)
                                 : 0;
                             return Text('$views Views',
                                 style: const TextStyle(
