@@ -1,0 +1,167 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────
+    // GLOBAL: koi bhi unauthenticated access nahi
+    // ──────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ──────────────────────────────────────────────
+    // USERS collection
+    // - Read:   sirf apna document
+    // - Create: sirf apna document (otp_screen se naya user)
+    // - Update: sirf apna document, aur roles array
+    //           client se shrink nahi ho sakta (append-only)
+    // - Delete: nahi (soft-delete via 'active' field)
+    // ──────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+                    && request.auth.uid == userId;
+
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    // Client 'roles' array ko directly overwrite nahi kar sakta
+                    // (sirf arrayUnion allowed hai, jo merge:true se aata hai).
+                    // Agar roles field change ho raha hai, toh naye roles me
+                    // purane saare roles bhi hone chahiye (append-only).
+                    && (!('roles' in request.resource.data)
+                        || (resource.data.keys().hasAny(['roles'])
+                            ? request.resource.data.roles.hasAll(resource.data.roles)
+                            : true));
+
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────
+    // LISTINGS collection
+    // - Read:   koi bhi authenticated user (search/browse ke liye)
+    // - Create: authenticated user, ownerId must match auth uid
+    // - Update: sirf ownerId wala hi (aur ownerId field change nahi ho sakta)
+    // - Delete: sirf ownerId wala hi
+    // ──────────────────────────────────────────────
+    match /listings/{listingId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid
+                    // ownerId change nahi ho sakta
+                    && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid;
+
+      // Listing ke andar report subcollection
+      // - Create: authenticated user, doc ID == reporter's uid (1 per user)
+      // - Read/Update/Delete: nahi (admin/Cloud Functions se hi)
+      match /reports/{reporterId} {
+        allow create: if request.auth != null
+                      && request.auth.uid == reporterId;
+        allow read, update, delete: if false;
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // TENANT PROFILES
+    // - Read/Write: sirf apna document
+    // ──────────────────────────────────────────────
+    match /tenantProfiles/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // ──────────────────────────────────────────────
+    // OWNER PROFILES
+    // - Read:   koi bhi authenticated (Find Tenants screen pe
+    //           owner profiles dikhte hain)
+    // - Write:  sirf apna document
+    // ──────────────────────────────────────────────
+    match /ownerProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId;
+    }
+
+    // ──────────────────────────────────────────────
+    // REQUESTS collection
+    // - Read:   sirf ownerId ya tenantId wala
+    // - Create: authenticated, aur senderType ke hisaab se
+    //           sender's uid match hona chahiye
+    // - Update: sirf ownerId ya tenantId wala
+    // - Delete: sirf ownerId ya tenantId wala
+    // ──────────────────────────────────────────────
+    match /requests/{requestId} {
+      allow read: if request.auth != null
+                  && (resource.data.ownerId == request.auth.uid
+                      || resource.data.tenantId == request.auth.uid);
+
+      allow create: if request.auth != null
+                    && (
+                      // Tenant bheji hai → tenantId match hona chahiye
+                      (request.resource.data.senderType == 'tenant'
+                       && request.resource.data.tenantId == request.auth.uid)
+                      ||
+                      // Owner bheji hai → ownerId match hona chahiye
+                      (request.resource.data.senderType == 'owner'
+                       && request.resource.data.ownerId == request.auth.uid)
+                    );
+
+      allow update: if request.auth != null
+                    && (resource.data.ownerId == request.auth.uid
+                        || resource.data.tenantId == request.auth.uid);
+
+      allow delete: if request.auth != null
+                    && (resource.data.ownerId == request.auth.uid
+                        || resource.data.tenantId == request.auth.uid);
+    }
+
+    // ──────────────────────────────────────────────
+    // NOTIFICATIONS collection
+    // - Read/Update: sirf apni notifications (userId match)
+    // - Create:      Cloud Functions se hota hai (admin SDK
+    //                bypass karta hai rules), client create nahi
+    // - Delete:      sirf apni notification
+    // ──────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+
+      allow create: if false; // sirf Cloud Functions (admin SDK)
+    }
+
+    // ──────────────────────────────────────────────
+    // REPORTS collection (user reports, not listing reports)
+    // - Create: authenticated user, reporterId must match uid
+    // - Read/Update/Delete: nahi (admin review ke liye)
+    // ──────────────────────────────────────────────
+    match /reports/{reportId} {
+      allow create: if request.auth != null
+                    && request.resource.data.reporterId == request.auth.uid;
+
+      allow read, update, delete: if false;
+    }
+
+    // ──────────────────────────────────────────────
+    // BROADCASTS collection
+    // - Client access: bilkul nahi
+    // - Cloud Functions (admin SDK) create karta hai
+    // ──────────────────────────────────────────────
+    match /broadcasts/{broadcastId} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -165,11 +165,13 @@ class _ListingMultiChipSelectorState extends State<ListingMultiChipSelector> {
 class ListingPhotoPicker extends StatefulWidget {
   final List<String> initialPhotos;
   final Function(List<String>) onPhotosChanged;
+  final String propertyKind;
 
   const ListingPhotoPicker(
       {super.key,
       this.initialPhotos = const [],
-      required this.onPhotosChanged});
+      required this.onPhotosChanged,
+      this.propertyKind = 'residential'});
 
   @override
   State<ListingPhotoPicker> createState() => _ListingPhotoPickerState();
@@ -181,13 +183,25 @@ class _ListingPhotoPickerState extends State<ListingPhotoPicker> {
   final List<bool> _isUploading = List.filled(5, false);
   final _storage = StorageDatasource();
 
-  final List<String> photoLabels = [
-    'Front View',
-    'Inside Room',
-    'Toilet',
-    'Water Area',
-    'Building/Galli'
+  static const List<String> _commercialPhotoLabels = [
+    'Front View\n(Entry/Reception)',
+    'Inside Room\n(Office/Workspace)',
+    'Toilet\n(Washroom)',
+    'Water Area\n(Pantry/Kitchen)',
+    'Building/Galli\n(Parking/Entrance)',
   ];
+
+  static const List<String> _residentialPhotoLabels = [
+    'Room View\n(Room/Bedroom)',
+    'Living Area\n(Common Area)',
+    'Toilet\n(Washroom)',
+    'Water Area\n(Kitchen/Cooking)',
+    'Building/Galli\n(Building/Entrance)',
+  ];
+
+  List<String> get photoLabels => widget.propertyKind == 'commercial'
+      ? _commercialPhotoLabels
+      : _residentialPhotoLabels;
 
   @override
   void initState() {

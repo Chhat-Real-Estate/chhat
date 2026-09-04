@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/listing_form_widgets.dart'; // NAYA IMPORT
 import '../../../core/constants/property_options.dart'; // NAYA IMPORT
@@ -69,12 +70,28 @@ class _AddListingScreenState extends State<AddListingScreen> {
   Future<void> _fetchExistingListing() async {
     setState(() => _isLoadingData = true);
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('listings')
-          .doc(widget.listingId)
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
+      final data = await Supabase.instance.client
+          .from('listings')
+          .select()
+          .eq('id', widget.listingId!)
+          .maybeSingle();
+
+      if (data != null) {
+        // SECURITY FIX #7: Ownership check
+        final prefs = await SharedPreferences.getInstance();
+        final currentUserId = prefs.getString('userId');
+        if ((data['owner_id'] ?? data['ownerId']) != currentUserId) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You can only edit your own listings'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            context.pop();
+          }
+          return;
+        }
         setState(() {
           _propertyKind = data['propertyKind'] ?? 'residential';
           _propertyCategory = data['propertyCategory'] ?? '';
@@ -224,6 +241,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   const SizedBox(height: 12),
                   ListingPhotoPicker(
                       initialPhotos: _uploadedPhotos,
+                      propertyKind: _propertyKind,
                       onPhotosChanged: (urls) =>
                           setState(() => _uploadedPhotos = urls)),
                   const SizedBox(height: 32),
@@ -620,19 +638,38 @@ class _AddListingScreenState extends State<AddListingScreen> {
         'visibility': _visibility,
       };
 
-      if (widget.listingId != null) {
-        await FirebaseFirestore.instance
-            .collection('listings')
-            .doc(widget.listingId)
-            .update(updateData);
-      } else {
-        final activeListings = await FirebaseFirestore.instance
-            .collection('listings')
-            .where('ownerId', isEqualTo: userId)
-            .where('active', isEqualTo: true)
-            .get();
+      final supabase = Supabase.instance.client;
 
-        if (activeListings.docs.length >= 3) {
+      if (widget.listingId != null) {
+        // SECURITY FIX #7: Ownership check before update
+        final existing = await supabase
+            .from('listings')
+            .select('owner_id')
+            .eq('id', widget.listingId!)
+            .maybeSingle();
+
+        if (existing == null || (existing['owner_id'] ?? '') != userId) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('You can only edit your own listings'),
+              backgroundColor: Colors.red,
+            ));
+          }
+          return;
+        }
+
+        await supabase
+            .from('listings')
+            .update(updateData)
+            .eq('id', widget.listingId!);
+      } else {
+        final activeListings = await supabase
+            .from('listings')
+            .select('id')
+            .eq('owner_id', userId)
+            .eq('active', true);
+
+        if ((activeListings as List).length >= 3) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('You can publish maximum 3 active listings.'),
@@ -643,10 +680,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
           return;
         }
 
-        updateData['createdAt'] = FieldValue.serverTimestamp();
-        updateData['status'] = 'active';
+        updateData['created_at'] = DateTime.now().toIso8601String();
         updateData['active'] = true;
-        await FirebaseFirestore.instance.collection('listings').add(updateData);
+        await supabase.from('listings').insert(updateData);
       }
 
       if (mounted) {

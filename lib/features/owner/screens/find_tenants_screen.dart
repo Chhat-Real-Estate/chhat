@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../requests/repositories/request_repository.dart';
 import '../../requests/models/request_model.dart';
@@ -140,40 +141,40 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
               },
             ),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('tenantProfiles')
-                  .where('isProfileComplete', isEqualTo: true)
-                  .snapshots(),
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: Supabase.instance.client
+                  .from('tenant_profiles')
+                  .stream(primaryKey: ['user_id'])
+                  .eq('is_profile_complete', true),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                       child: CircularProgressIndicator(color: _blueDark));
                 }
-                var docs = snapshot.data?.docs ?? [];
+                var docs = snapshot.data ?? [];
 
                 docs = docs
                     .where((d) =>
-                        ((d.data() as Map)['propertyKind'] ?? 'residential') ==
+                        ((d['property_kind'] ?? d['propertyKind']) ?? 'residential') ==
                         _propertyKind)
                     .toList();
 
-                if (_filterType != 'All Types') {
+                if (_filterType != 'All Tenants') {
                   docs = docs
-                      .where(
-                          (d) => (d.data() as Map)['tenantType'] == _filterType)
+                      .where((d) =>
+                          (d['tenant_type'] ?? d['tenantType']) == _filterType)
                       .toList();
                 }
                 if (_filterBudget != 'All Budgets') {
                   docs = docs
                       .where((d) =>
-                          (d.data() as Map)['budgetRange'] == _filterBudget)
+                          (d['budget_range'] ?? d['budgetRange']) == _filterBudget)
                       .toList();
                 }
                 if (_filterMoveIn != 'Any Move-in') {
                   docs = docs
                       .where((d) =>
-                          (d.data() as Map)['moveInDate'] == _filterMoveIn)
+                          (d['move_in_date'] ?? d['moveInDate']) == _filterMoveIn)
                       .toList();
                 }
 
@@ -187,12 +188,12 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                   padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final tenantId = docs[index].id;
+                    final data = docs[index];
+                    final tenantId = (data['user_id'] ?? data['userId'])?.toString() ?? '';
                     final tenantName = data['name'] ?? 'Unknown Tenant';
-                    final timestamp = data['updatedAt'] as Timestamp?;
-                    final timeString = timestamp != null
-                        ? timestamp.toDate().toString().substring(0, 16)
+                    final updatedAtStr = data['updated_at'] ?? data['updatedAt'];
+                    final timeString = updatedAtStr != null
+                        ? updatedAtStr.toString().substring(0, 16)
                         : 'N/A';
 
                     return Container(
@@ -410,13 +411,18 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                               style: const TextStyle(
                                   fontSize: 12, color: Colors.grey)),
                           const Divider(height: 24),
-                          _buildInfoRow('Type:', data['tenantType'] ?? 'N/A'),
+                          _buildInfoRow(
+                              (data['propertyKind'] == 'commercial')
+                                  ? 'Business Type:'
+                                  : 'Type:',
+                              data['tenantType'] ?? 'N/A'),
                           _buildInfoRow(
                               'Budget:', data['budgetRange'] ?? 'N/A'),
                           _buildInfoRow(
                               'Move In:', data['moveInDate'] ?? 'N/A'),
-                          _buildInfoRow(
-                              'Occupation:', data['occupation'] ?? 'N/A'),
+                          if (data['propertyKind'] != 'commercial')
+                            _buildInfoRow(
+                                'Occupation:', data['occupation'] ?? 'N/A'),
                           const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
@@ -497,13 +503,13 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
 
                                 if (confirm == true && userId != null) {
                                   try {
-                                    final listingQuery = await FirebaseFirestore
-                                        .instance
-                                        .collection('listings')
-                                        .where('ownerId', isEqualTo: userId)
-                                        .limit(1)
-                                        .get();
-                                    if (listingQuery.docs.isEmpty) {
+                                    final listings = await Supabase.instance.client
+                                        .from('listings')
+                                        .select('id, area, rent')
+                                        .eq('owner_id', userId!)
+                                        .limit(1);
+
+                                    if ((listings as List).isEmpty) {
                                       if (context.mounted)
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(const SnackBar(
@@ -512,18 +518,15 @@ class _FindTenantsScreenState extends State<FindTenantsScreen> {
                                       return;
                                     }
 
+                                    final firstListing = listings.first;
                                     await RequestRepository()
                                         .sendRequest(RequestModel(
                                       tenantId: tenantId,
                                       tenantPhone: 'Hidden',
-                                      listingId: listingQuery.docs.first.id,
+                                      listingId: firstListing['id'].toString(),
                                       ownerId: userId!,
-                                      area: listingQuery.docs.first
-                                              .data()['area'] ??
-                                          '',
-                                      rent: listingQuery.docs.first
-                                              .data()['rent'] ??
-                                          0,
+                                      area: firstListing['area'] ?? '',
+                                      rent: (firstListing['rent'] as num?)?.toInt() ?? 0,
                                       senderType: 'owner',
                                     ));
 

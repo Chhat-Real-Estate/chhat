@@ -1,5 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // NAYA: Storage se images delete karne ke liye
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/listing_model.dart';
 import '../../../core/utils/app_exceptions.dart';
 import '../../../core/utils/app_logger.dart';
@@ -7,209 +6,223 @@ import '../../../core/utils/app_logger.dart';
 const int kListingsPageSize = 20;
 
 class ListingRepository {
-  final FirebaseFirestore _db;
-  ListingRepository({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _client;
+  ListingRepository({SupabaseClient? client, dynamic firestore})
+      : _client = client ?? Supabase.instance.client;
 
   // Listing create karo
   Future<String> createListing(ListingModel listing) async {
     try {
       // Anti-dalal check — ek number se max 3 listings
-      final existing = await _db
-          .collection('listings')
-          .where('phone', isEqualTo: listing.phone)
-          .where('active', isEqualTo: true)
-          .limit(3)
-          .get();
+      final existing = await _client
+          .from('listings')
+          .select('id')
+          .eq('phone', listing.phone)
+          .eq('active', true)
+          .limit(3);
 
-      if (existing.docs.length >= 3) {
+      if ((existing as List).length >= 3) {
         throw AppException('Aap already 3 rooms list kar chuke ho');
       }
 
-      final doc = await _db.collection('listings').add(listing.toMap());
-      return doc.id;
+      final res = await _client
+          .from('listings')
+          .insert(listing.toMap())
+          .select('id')
+          .single();
+
+      return res['id'].toString();
     } catch (e, st) {
       AppLogger.error('ListingRepository.createListing', e, st);
       throw mapToAppException(e);
     }
   }
 
-  // Owner ki listings. [limit] pagination ke liye — puri collection kabhi mat khincho.
+  // Owner ki listings stream (Realtime)
   Stream<List<ListingModel>> getOwnerListings(
     String ownerId, {
     int limit = kListingsPageSize,
   }) {
-    return _db
-        .collection('listings')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('active', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
+    return _client
+        .from('listings')
+        .stream(primaryKey: ['id'])
+        .eq('owner_id', ownerId)
+        .order('created_at', ascending: false)
         .limit(limit)
-        .snapshots()
+        .map((data) => data
+            .where((item) => item['active'] == true)
+            .map((item) => ListingModel.fromMap(item, item['id'].toString()))
+            .toList())
         .handleError((e, st) {
       AppLogger.error('ListingRepository.getOwnerListings', e, st);
-    }).map((snap) => snap.docs
-            .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
-            .toList());
+    });
   }
 
-  /// FIX: pehle [area] param liya jaata tha par IGNORE hota tha — hardcoded
-  /// 200 docs khinch ke Dart side filter hota tha (4x zyada Firestore reads
-  /// jitni zarurat thi, aur area-wise filtering hi missing thi).
-  /// Ab jab [area] khali nahi hai, server-side where-clause se filter hota
-  /// hai — sirf utne hi docs charge hote hain jitni zarurat hai.
+  // Nearby listings stream
   Stream<List<ListingModel>> getNearbyListings(
     String area, {
     int limit = 50,
   }) {
-    Query<Map<String, dynamic>> query =
-        _db.collection('listings').where('active', isEqualTo: true);
+    final stream = _client
+        .from('listings')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .limit(limit);
 
-    if (area.trim().isNotEmpty) {
-      query = query.where('area', isEqualTo: area.toLowerCase().trim());
-    }
-
-    return query
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .handleError((e, st) {
+    return stream.map((data) {
+      final normalizedArea = area.toLowerCase().trim();
+      return data
+          .where((item) =>
+              item['active'] == true &&
+              (normalizedArea.isEmpty ||
+                  (item['area'] ?? '').toString().toLowerCase().trim() ==
+                      normalizedArea))
+          .map((item) => ListingModel.fromMap(item, item['id'].toString()))
+          .toList();
+    }).handleError((e, st) {
       AppLogger.error('ListingRepository.getNearbyListings', e, st);
       throw e;
-    }).map((snap) => snap.docs
-            .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
-            .toList());
+    });
   }
 
-  /// NAYA: Proper search — [searchKeywords] field (Cloud Function se
-  /// auto-generate hoti hai) ke against server-side query karta hai, poore
-  /// dataset pe, sirf latest N docs tak limited nahi. propertyKind
-  /// (residential/commercial) dono ke liye same tareeke se kaam karta hai.
+  // Search listings stream
   Stream<List<ListingModel>> searchListings({
     required String propertyKind,
     String search = '',
     int limit = 50,
   }) {
-    Query<Map<String, dynamic>> query = _db
-        .collection('listings')
-        .where('active', isEqualTo: true)
-        .where('propertyKind', isEqualTo: propertyKind);
+    final stream = _client
+        .from('listings')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .limit(limit);
 
-    final trimmed = search.toLowerCase().trim();
-    if (trimmed.isNotEmpty) {
-      final words = trimmed.split(RegExp(r'\s+')).take(10).toList();
-      query = query.where('searchKeywords', arrayContainsAny: words);
-    }
+    return stream.map((data) {
+      final trimmed = search.toLowerCase().trim();
+      return data
+          .where((item) {
+            final matchesActive = item['active'] == true;
+            final matchesKind =
+                (item['property_kind'] ?? 'residential') == propertyKind;
+            if (!matchesActive || !matchesKind) return false;
+            if (trimmed.isEmpty) return true;
 
-    return query
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .handleError((e, st) {
-      // FIX: pehle sirf log hota tha, rethrow nahi — isliye StreamBuilder ko
-      // error kabhi pata hi nahi chalta tha aur skeleton loading hamesha ke
-      // liye atki reh jaati thi (koi error message ya retry button nahi).
+            final keywords =
+                List<String>.from(item['search_keywords'] ?? const []);
+            final words = trimmed.split(RegExp(r'\s+'));
+            return words.any((word) => keywords.contains(word));
+          })
+          .map((item) => ListingModel.fromMap(item, item['id'].toString()))
+          .toList();
+    }).handleError((e, st) {
       AppLogger.error('ListingRepository.searchListings', e, st);
       throw e;
-    }).map((snap) => snap.docs
-            .map((doc) => ListingModel.fromMap(doc.data(), doc.id))
-            .toList());
+    });
   }
 
-  /// SECURITY FIX (IDOR): pehle koi bhi apna listingId aur kisi aur ka
-  /// document ID pass karke uski listing deactivate kara sakta tha, kyunki
-  /// ownership check hi nahi tha. [requesterId] = current logged-in user's uid.
-  /// NOTE: yeh client-side check hai (defense-in-depth) — asli enforcement
-  /// Firestore Rules mein honi chahiye:
-  ///   allow update: if request.auth.uid == resource.data.ownerId;
+  // Deactivate listing
   Future<void> deactivateListing(String listingId, String requesterId) async {
     try {
-      final ref = _db.collection('listings').doc(listingId);
-      final snap = await ref.get();
+      final res = await _client
+          .from('listings')
+          .select('owner_id')
+          .eq('id', listingId)
+          .maybeSingle();
 
-      if (!snap.exists) {
+      if (res == null) {
         throw AppException('Yeh listing ab maujood nahi hai.');
       }
-      if (snap.data()?['ownerId'] != requesterId) {
+      if (res['owner_id'] != requesterId) {
         throw AppException('Aap sirf apni listings deactivate kar sakte hain.');
       }
 
-      await ref.update({'active': false});
+      await _client
+          .from('listings')
+          .update({'active': false}).eq('id', listingId);
     } catch (e, st) {
       AppLogger.error('ListingRepository.deactivateListing', e, st);
       throw mapToAppException(e);
     }
   }
 
-  // NAYA: Permanent Delete (Database + Storage dono se kachra saaf karne ke liye)
-  // SECURITY FIX: same ownership check yahan bhi zaroori hai.
+  // Permanent Delete (Database + Storage)
   Future<void> deleteListingPermanently(
     String listingId,
     List<String> photoUrls,
     String requesterId,
   ) async {
     try {
-      final ref = _db.collection('listings').doc(listingId);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      final res = await _client
+          .from('listings')
+          .select('owner_id')
+          .eq('id', listingId)
+          .maybeSingle();
+
+      if (res == null) {
         throw AppException('Yeh listing ab maujood nahi hai.');
       }
-      if (snap.data()?['ownerId'] != requesterId) {
+      if (res['owner_id'] != requesterId) {
         throw AppException('Aap sirf apni listings delete kar sakte hain.');
       }
 
-      // 1. Pehle Firebase Storage se saari photos udao
-      for (String url in photoUrls) {
+      // 1. Storage se images delete karo
+      for (final url in photoUrls) {
         try {
-          if (url.isNotEmpty && url.contains('firebasestorage')) {
-            final storageRef = FirebaseStorage.instance.refFromURL(url);
-            await storageRef.delete();
+          final uri = Uri.parse(url);
+          final segments = uri.pathSegments;
+          final listingsIndex = segments.indexOf('listings');
+          if (listingsIndex != -1 && listingsIndex + 1 < segments.length) {
+            final path = segments.sublist(listingsIndex + 1).join('/');
+            await _client.storage.from('listings').remove([path]);
           }
         } catch (e, st) {
-          // ek photo delete fail hone se poora operation rukna nahi chahiye —
-          // isliye yahan sirf log karte hain, rethrow nahi.
-          AppLogger.error(
-              'ListingRepository.deleteListingPermanently.photo', e, st);
+          AppLogger.error('ListingRepository.deleteListingPermanently.photo', e, st);
         }
       }
 
-      // 2. Uske baad Firestore se main room ka document udao
-      await ref.delete();
+      // 2. Database row delete karo
+      await _client.from('listings').delete().eq('id', listingId);
     } catch (e, st) {
       AppLogger.error('ListingRepository.deleteListingPermanently', e, st);
       throw mapToAppException(e);
     }
   }
 
-  /// SECURITY FIX: pehle koi bhi ek listing ko baar-baar report karke
-  /// usko fraudulently 5-report threshold pe deactivate kara sakta tha
-  /// (spam/abuse). Ab per-reporter dedupe hai — ek user ek listing
-  /// sirf ek baar report kar sakta hai.
+  // Report listing
   Future<void> reportListing(String listingId, String reporterId) async {
     try {
-      final ref = _db.collection('listings').doc(listingId);
-      final reportDocRef = ref.collection('reports').doc(reporterId);
+      // 1. Check if already reported
+      final existing = await _client
+          .from('listing_reports')
+          .select('reported_at')
+          .eq('listing_id', listingId)
+          .eq('reporter_id', reporterId)
+          .maybeSingle();
 
-      await _db.runTransaction((txn) async {
-        final reportSnap = await txn.get(reportDocRef);
-        if (reportSnap.exists) {
-          throw AppException('Aap yeh listing already report kar chuke hain.');
-        }
+      if (existing != null) {
+        throw AppException('Aap yeh listing already report kar chuke hain.');
+      }
 
-        final snap = await txn.get(ref);
-        if (!snap.exists) {
-          throw AppException('Yeh listing ab maujood nahi hai.');
-        }
-
-        final newCount = ((snap.data()?['reportCount'] ?? 0) as int) + 1;
-        txn.set(reportDocRef, {'reportedAt': FieldValue.serverTimestamp()});
-
-        if (newCount >= 5) {
-          txn.update(ref, {'reportCount': newCount, 'active': false});
-        } else {
-          txn.update(ref, {'reportCount': newCount});
-        }
+      // 2. Insert report dedupe record
+      await _client.from('listing_reports').insert({
+        'listing_id': listingId,
+        'reporter_id': reporterId,
       });
+
+      // 3. Increment report_count on listing
+      final listing = await _client
+          .from('listings')
+          .select('report_count')
+          .eq('id', listingId)
+          .single();
+
+      final currentCount = (listing['report_count'] as int? ?? 0) + 1;
+      final updates = <String, dynamic>{'report_count': currentCount};
+      if (currentCount >= 5) {
+        updates['active'] = false;
+      }
+
+      await _client.from('listings').update(updates).eq('id', listingId);
     } catch (e, st) {
       AppLogger.error('ListingRepository.reportListing', e, st);
       throw mapToAppException(e);

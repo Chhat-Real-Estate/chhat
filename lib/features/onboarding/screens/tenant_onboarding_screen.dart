@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Database
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Local Storage
 import '../../../core/constants/property_options.dart'; // NAYA IMPORT
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class TenantOnboardingScreen extends StatefulWidget {
   const TenantOnboardingScreen({super.key});
@@ -104,44 +107,51 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
   Future<void> _submitForm() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('userId') ?? 'unknown_user';
-      final firestore = FirebaseFirestore.instance;
+      final userId = prefs.getString('userId');
+      // SECURITY FIX #6: unknown_user fallback hataya — null ho to login pe bhejo
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Session expire ho gaya, dobara login karo')),
+          );
+          context.go('/phone');
+        }
+        return;
+      }
+      final supabase = Supabase.instance.client;
 
       // 1. Tenant Profile Data Prepare Karo
       final tenantData = {
+        'user_id': userId,
         'name': _nameController.text.trim(),
         'age': int.tryParse(_ageController.text.trim()) ?? 0,
         'gender': _selectedGender,
-        'tenantType': _tenantType,
+        'tenant_type': _tenantType,
         'occupation': _occupation,
         'city': _cityController.text.trim(),
         'area': _areaController.text.trim(),
-        'subArea': _subAreaController.text.trim(),
-        'propertyKind': _propertyKind,
-        'propertyRequirements': _propertyReq,
-        'moveInDate': _moveIn,
-        'budgetRange': _budgetRange,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isProfileComplete':
-            true, // FIX ISSUE #1: Add explicitly to hide incomplete profiles
+        'sub_area': _subAreaController.text.trim(),
+        'property_kind': _propertyKind,
+        'property_requirements': _propertyReq,
+        'move_in_date': _moveIn,
+        'budget_range': _budgetRange,
+        'is_profile_complete': true,
+        'updated_at': DateTime.now().toIso8601String(),
       };
 
-      // 2. Database me 'tenantProfiles' collection me save karo
-      await firestore
-          .collection('tenantProfiles')
-          .doc(userId)
-          .set(tenantData, SetOptions(merge: true));
+      // 2. Database me 'tenant_profiles' table me upsert karo
+      await supabase.from('tenant_profiles').upsert(tenantData);
 
-      // 3. User document update karo (Profile complete ho gayi)
-      await firestore.collection('users').doc(userId).set({
-        'profileComplete': true,
-        'activeRole': 'tenant',
-        'roles': FieldValue.arrayUnion(['tenant']),
+      // 3. User document update karo
+      await supabase.from('users').update({
+        'profile_complete': true,
+        'active_role': 'tenant',
+        'roles': ['tenant'],
         'name': _nameController.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
 
-      // Cache update — profile screen instant load ke liye
+      // Cache update
       await prefs.setString('userName', _nameController.text.trim());
       await prefs.setString('userRole', 'tenant');
 
@@ -196,16 +206,24 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
               Navigator.pop(ctx);
               try {
                 final prefs = await SharedPreferences.getInstance();
-                final userId = prefs.getString('userId') ?? 'unknown_user';
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(userId)
-                    .set({
-                  'activeRole': 'tenant',
-                  'roles': FieldValue.arrayUnion(['tenant']),
-                  'profileComplete': true,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+                final userId = prefs.getString('userId');
+                if (userId == null || userId.isEmpty) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Session expire ho gaya, dobara login karo')),
+                    );
+                    context.go('/phone');
+                  }
+                  return;
+                }
+                await Supabase.instance.client
+                    .from('users')
+                    .update({
+                  'active_role': 'tenant',
+                  'roles': ['tenant'],
+                  'profile_complete': true,
+                  'updated_at': DateTime.now().toIso8601String(),
+                }).eq('id', userId);
                 await prefs.setString('userRole', 'tenant');
               } catch (_) {}
               if (mounted) {
@@ -275,15 +293,79 @@ class _TenantOnboardingScreenState extends State<TenantOnboardingScreen> {
 
   Future<void> _fetchCurrentLocation() async {
     setState(() => _isFetchingLocation = true);
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      _isFetchingLocation = false;
-      _areaController.text = "Barkat Ali Nagar, Wadala East";
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location Verified Successfully!')),
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enable device location services.')),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permission denied.')),
+            );
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied. Please enable in settings.')),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
       );
+
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        final subLocality = place.subLocality ?? place.thoroughfare ?? '';
+        final locality = place.locality ?? place.subAdministrativeArea ?? '';
+        final detectedCity = place.locality ?? place.administrativeArea ?? '';
+
+        final areaText = [subLocality, locality].where((s) => s.trim().isNotEmpty).join(', ');
+
+        if (mounted) {
+          setState(() {
+            if (areaText.isNotEmpty) {
+              _areaController.text = areaText;
+            }
+            if (detectedCity.isNotEmpty && _cityController.text.trim().isEmpty) {
+              _cityController.text = detectedCity;
+            }
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location detected successfully!'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not detect location: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isFetchingLocation = false);
     }
   }
 

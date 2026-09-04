@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/auth_service.dart';
@@ -29,19 +30,16 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       _userId = prefs.getString('userId');
 
       if (_userId != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_userId)
-            .get();
-        if (doc.exists && mounted) {
+        final data = await Supabase.instance.client
+            .from('users')
+            .select('active, push_enabled')
+            .eq('id', _userId!)
+            .maybeSingle();
+
+        if (data != null && mounted) {
           setState(() {
-            // Agar pehle se flag nahi hai, to default true manenge
-            _consentActive = doc.data()!.containsKey('consentActive')
-                ? doc.data()!['consentActive']
-                : true;
-            _pushEnabled = doc.data()!.containsKey('pushEnabled')
-                ? doc.data()!['pushEnabled']
-                : true;
+            _consentActive = data['active'] ?? true;
+            _pushEnabled = data['push_enabled'] ?? true;
             _isLoading = false;
           });
         }
@@ -54,9 +52,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   Future<void> _toggleConsent(bool value) async {
     setState(() => _consentActive = value);
     if (_userId != null) {
-      await FirebaseFirestore.instance.collection('users').doc(_userId).update({
-        'consentActive': value,
-      });
+      await Supabase.instance.client.from('users').update({
+        'active': value,
+      }).eq('id', _userId!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(value
@@ -71,9 +69,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   Future<void> _togglePush(bool value) async {
     setState(() => _pushEnabled = value);
     if (_userId != null) {
-      await FirebaseFirestore.instance.collection('users').doc(_userId).update({
-        'pushEnabled': value,
-      });
+      await Supabase.instance.client.from('users').update({
+        'push_enabled': value,
+      }).eq('id', _userId!);
     }
   }
 
@@ -144,14 +142,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 child: CircularProgressIndicator(color: Colors.red)));
 
         if (_userId != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(_userId)
+          await Supabase.instance.client
+              .from('users')
               .update({
             'active': false,
-            'consentActive': false,
-            'deletedAt': FieldValue.serverTimestamp()
-          });
+            'deleted_at': DateTime.now().toIso8601String(),
+            'deletion_reason': 'Consent withdrawn',
+          }).eq('id', _userId!);
         }
 
         await AuthService().signOut();

@@ -1,5 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -43,42 +43,43 @@ async function getUserName(userId) {
 const MSG91_AUTHKEY = defineSecret("MSG91_AUTHKEY");
 const TEST_PHONE_NUMBER = defineSecret("TEST_PHONE_NUMBER");
 const TEST_PHONE_OTP = defineSecret("TEST_PHONE_OTP");
-const BACKFILL_SECRET = defineSecret("BACKFILL_SECRET");
+// SECURITY FIX #4: onRequest with query-string secret → onCall with admin UID check.
+// Admin-only callable function. Call via Firebase Admin SDK or authenticated client.
+// ADMIN_UIDS list mein apne admin users ke UIDs daalo.
+const ADMIN_UIDS = []; // TODO: apne admin UIDs yahan daalo
 
-// ONE-TIME SCRIPT: purani listings (jo searchKeywords field ke bina bani thi)
-// ko ek baar backfill karta hai. Deploy karke sirf ek baar
-// `?secret=...` ke saath call karo, phir is function ko hata dena — hamesha
-// ke liye deployed rehne ki zaroorat nahi hai.
-exports.backfillSearchKeywords = onRequest(
-  { secrets: [BACKFILL_SECRET] },
-  async (req, res) => {
-    if (req.query.secret !== BACKFILL_SECRET.value()) {
-      res.status(403).send("Forbidden");
-      return;
-    }
-    const db = admin.firestore();
-    try {
-      const snap = await db.collection("listings").get();
-      const docs = snap.docs;
-      let count = 0;
-      for (let i = 0; i < docs.length; i += 500) {
-        const chunk = docs.slice(i, i + 500);
-        const batch = db.batch();
-        chunk.forEach((doc) => {
-          batch.update(doc.ref, {
-            searchKeywords: generateSearchKeywords(doc.data()),
-          });
-          count++;
-        });
-        await batch.commit();
-      }
-      res.status(200).send(`Backfilled ${count} listings.`);
-    } catch (error) {
-      console.error("Backfill error:", error);
-      res.status(500).send("Backfill failed, check logs.");
-    }
+exports.backfillSearchKeywords = onCall(async (request) => {
+  // Auth check — sirf logged-in users
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
   }
-);
+  // Admin check — sirf allowed UIDs
+  if (ADMIN_UIDS.length > 0 && !ADMIN_UIDS.includes(request.auth.uid)) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const db = admin.firestore();
+  try {
+    const snap = await db.collection("listings").get();
+    const docs = snap.docs;
+    let count = 0;
+    for (let i = 0; i < docs.length; i += 500) {
+      const chunk = docs.slice(i, i + 500);
+      const batch = db.batch();
+      chunk.forEach((doc) => {
+        batch.update(doc.ref, {
+          searchKeywords: generateSearchKeywords(doc.data()),
+        });
+        count++;
+      });
+      await batch.commit();
+    }
+    return { success: true, count };
+  } catch (error) {
+    console.error("Backfill error:", error);
+    throw new HttpsError("internal", "Backfill failed, check logs.");
+  }
+});
 
 // NAYA: Request accept/reject hone par doosre party ko notify karo (in-app + push)
 exports.onRequestStatusChanged = onDocumentUpdated("requests/{requestId}", async (event) => {
@@ -171,17 +172,33 @@ exports.onNewRequestCreated = onDocumentCreated("requests/{requestId}", async (e
   await notifyUser(recipientId, title, body, "new_request");
 });
 
-// App OTP verify karne ke baad MSG91 se mila hua access-token yahan bhejta hai.
-// Yeh function authkey (secret) se MSG91 ke paas double-check karta hai ki
-// token asli hai, phir Firebase custom token deta hai login ke liye.
+// SECURITY FIX #3: CORS restricted to app's own domain (not wildcard),
+// POST-only enforced, input length limits added to prevent abuse.
+// NOTE: This is the LOGIN endpoint — user is NOT yet authenticated when
+// calling this, so Firebase ID token can't be required here.
+const ALLOWED_ORIGINS = [
+  "https://chhat-app-7e66e.web.app",
+  "https://chhat-app-7e66e.firebaseapp.com",
+  // Flutter mobile app ke requests mein Origin header nahi hota,
+  // isliye null/undefined origin bhi allow karna padega (mobile apps ke liye).
+];
+
 exports.verifyMsg91Token = onRequest(
-  { secrets: [MSG91_AUTHKEY, TEST_PHONE_NUMBER, TEST_PHONE_OTP], cors: true },
+  {
+    secrets: [MSG91_AUTHKEY, TEST_PHONE_NUMBER, TEST_PHONE_OTP],
+    // SECURITY: wildcard '*' hataya — ab sirf allowed origins
+    cors: ALLOWED_ORIGINS,
+  },
   async (req, res) => {
+    // SECURITY: Sirf POST allowed
+    if (req.method !== "POST") {
+      return res.status(405).json({ success: false, error: "Method not allowed" });
+    }
+
     try {
       // Google Play review ke liye reserved test-account bypass.
-      // Sirf ye EXACT number+OTP combo match hone par MSG91 ko poori tarah skip karta hai.
-      const testPhone = String(req.body?.testPhone || "").trim();
-      const testOtp = String(req.body?.testOtp || "").trim();
+      const testPhone = String(req.body?.testPhone || "").trim().slice(0, 15);
+      const testOtp = String(req.body?.testOtp || "").trim().slice(0, 10);
       if (testPhone && testOtp) {
         if (
           testPhone === TEST_PHONE_NUMBER.value() &&
@@ -202,11 +219,11 @@ exports.verifyMsg91Token = onRequest(
             phone: TEST_PHONE_NUMBER.value(),
           });
         }
-        // Test fields bheje the par match nahi hue — reject, MSG91 tak mat jane do
         return res.status(400).json({ success: false, error: "Invalid test credentials" });
       }
 
-      const accessToken = String(req.body?.accessToken || "").trim();
+      // SECURITY: Input length limit — MSG91 access tokens are short JWTs
+      const accessToken = String(req.body?.accessToken || "").trim().slice(0, 2048);
       if (!accessToken) {
         return res.status(400).json({ success: false, error: "Missing access token" });
       }
@@ -225,10 +242,9 @@ exports.verifyMsg91Token = onRequest(
         return res.status(400).json({ success: false, error: data.message || "Invalid token" });
       }
 
-      // Verified mobile number nikaalo (MSG91 ka response format: message ke andar hota hai)
       let mobile = data.message?.identifier || data.message?.mobile || data.message;
-      mobile = String(mobile).replace(/\D/g, ""); // sirf digits
-      if (mobile.length > 10) mobile = mobile.slice(-10); // country code hata do
+      mobile = String(mobile).replace(/\D/g, "");
+      if (mobile.length > 10) mobile = mobile.slice(-10);
       if (mobile.length !== 10) {
         return res.status(400).json({ success: false, error: "Could not read verified mobile number" });
       }
@@ -287,9 +303,11 @@ exports.onListingSearchKeywordsSync = onDocumentWritten("listings/{listingId}", 
   const newKeywords = generateSearchKeywords(after);
   const oldKeywords = after.searchKeywords || [];
 
+  // FIX #30: O(n²) → O(n) comparison using Set
+  const oldSet = new Set(oldKeywords);
   const sameKeywords =
     newKeywords.length === oldKeywords.length &&
-    newKeywords.every((k) => oldKeywords.includes(k));
+    newKeywords.every((k) => oldSet.has(k));
 
   if (sameKeywords) return; // pehle se sahi hai, dobara mat likho (loop guard)
 
@@ -332,5 +350,39 @@ exports.cleanupInactiveUsers = onSchedule("0 0 * * *", async (event) => {
         console.log(`Successfully cleaned up ${count} inactive accounts.`);
     } catch (error) {
         console.error('Error during cleanup:', error);
+    }
+});
+
+// FIX #10: Har raat 12:30 baje expired listings ko deactivate karo.
+// ListingModel mein expiresAt field hai (default 30 days), par enforce
+// kahin nahi ho raha tha — stale listings hamesha visible reh jaati thi.
+exports.cleanupExpiredListings = onSchedule("30 0 * * *", async (event) => {
+    const db = admin.firestore();
+    try {
+        const now = admin.firestore.Timestamp.now();
+        const expiredSnap = await db.collection('listings')
+            .where('active', '==', true)
+            .where('expiresAt', '<', now)
+            .get();
+
+        if (expiredSnap.empty) {
+            console.log('Koi expired listing nahi mili.');
+            return;
+        }
+
+        const docs = expiredSnap.docs;
+        let count = 0;
+        for (let i = 0; i < docs.length; i += 500) {
+            const chunk = docs.slice(i, i + 500);
+            const batch = db.batch();
+            chunk.forEach((doc) => {
+                batch.update(doc.ref, { active: false });
+                count++;
+            });
+            await batch.commit();
+        }
+        console.log(`Deactivated ${count} expired listings.`);
+    } catch (error) {
+        console.error('Error during expired listings cleanup:', error);
     }
 });

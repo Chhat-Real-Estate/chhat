@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../features/listings/repositories/listing_repository.dart';
 import '../../../features/listings/models/listing_model.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // For User ID
-import 'package:cloud_firestore/cloud_firestore.dart'; // For Smart Filter Data Fetching
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // For Smart Filter Data Fetching
 import 'tenant_profile_tab.dart'; // NAYA: Extracted tab import
 import 'tenant_requests_screen.dart'; // NAYA: Extracted requests import
 import '../../profile/screens/profile_screen.dart';
@@ -122,16 +123,15 @@ class _ExplorePageState extends State<_ExplorePage> {
       final userId = prefs.getString('userId');
       if (userId == null) return;
 
-      final doc = await FirebaseFirestore.instance
-          .collection('tenantProfiles')
-          .doc(userId)
-          .get();
+      final data = await Supabase.instance.client
+          .from('tenant_profiles')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      // FIX: Check if widget is still in the tree before calling setState
       if (!mounted) return;
 
-      if (doc.exists) {
-        final data = doc.data()!;
+      if (data != null) {
         setState(() {
           final reqs = List<String>.from(data['propertyRequirements'] ?? []);
           if (reqs.isNotEmpty) _filterPropCat = reqs.first;

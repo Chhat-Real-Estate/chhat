@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../listings/models/listing_model.dart';
 import '../../listings/repositories/listing_repository.dart';
 
@@ -263,15 +264,15 @@ class _OwnerFullListingCardState extends State<OwnerFullListingCard> {
                         const SizedBox(width: 16),
                         const Icon(Icons.mail_outline,
                             size: 16, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('requests')
-                              .where('listingId', isEqualTo: widget.listing.id)
-                              .where('senderType', isEqualTo: 'owner')
-                              .snapshots(),
+                        StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: Supabase.instance.client
+                              .from('requests')
+                              .stream(primaryKey: ['id'])
+                              .eq('listing_id', widget.listing.id ?? ''),
                           builder: (context, snap) {
-                            final invites = snap.data?.docs.length ?? 0;
+                            final invites = (snap.data ?? [])
+                                .where((r) => r['sender_type'] == 'owner')
+                                .length;
                             return Text('$invites Invites',
                                 style: const TextStyle(
                                     fontSize: 13,

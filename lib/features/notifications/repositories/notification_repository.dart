@@ -1,74 +1,96 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/notification_model.dart';
 import '../../../core/utils/app_exceptions.dart';
 import '../../../core/utils/app_logger.dart';
 
 class NotificationRepository {
-  final FirebaseFirestore _db;
-  NotificationRepository({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _client;
+  NotificationRepository({SupabaseClient? client, dynamic firestore})
+      : _client = client ?? Supabase.instance.client;
 
-  /// User ki saari notifications, naye se purane order mein
+  /// User ki saari notifications (Realtime Stream)
   Stream<List<NotificationModel>> watchNotifications(String userId) {
-    return _db
-        .collection('notifications')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
+    return _client
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
         .limit(50)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
+        .map((data) => data
+            .map((item) => NotificationModel.fromMap(item, item['id'].toString()))
             .toList())
         .handleError((error) {
-      // FIX: pehle return value discard ho jaata tha (handleError isse
-      // stream me inject nahi karta) — StreamBuilder ko error kabhi pata
-      // nahi chalta tha, list hamesha "loading" jaisi dikhti reh jaati thi.
       AppLogger.error('NotificationRepository.watchNotifications', error, null);
-      throw error;
+      return <NotificationModel>[];
     });
   }
 
   /// Unread count — bell badge ke liye
   Stream<int> watchUnreadCount(String userId) {
-    return _db
-        .collection('notifications')
-        .where('userId', isEqualTo: userId)
-        .where('read', isEqualTo: false)
-        .snapshots()
-        .map((snap) => snap.docs.length)
+    return _client
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .limit(100)
+        .map((data) => data.where((item) => item['read'] == false).length)
         .handleError((error) {
       AppLogger.error('NotificationRepository.watchUnreadCount', error, null);
       return 0;
     });
   }
 
+  /// Server-side aggregation count query
+  Future<int> getUnreadCount(String userId) async {
+    try {
+      final res = await _client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('read', false)
+          .count(CountOption.exact);
+      return res.count;
+    } catch (e, st) {
+      AppLogger.error('NotificationRepository.getUnreadCount', e, st);
+      return 0;
+    }
+  }
+
   Future<void> markAsRead(String notificationId, String requesterId) async {
     try {
-      final doc =
-          await _db.collection('notifications').doc(notificationId).get();
-      if (!doc.exists) return;
-      // SECURITY: sirf apni hi notification mark-as-read kar sakte ho
-      if (doc.data()!['userId'] != requesterId) {
+      final doc = await _client
+          .from('notifications')
+          .select('user_id')
+          .eq('id', notificationId)
+          .maybeSingle();
+
+      if (doc == null) return;
+      if (doc['user_id'] != requesterId) {
         throw AppException('Aap ye notification update nahi kar sakte.');
       }
-      await doc.reference.update({'read': true});
+
+      await _client
+          .from('notifications')
+          .update({'read': true}).eq('id', notificationId);
     } catch (e, st) {
       AppLogger.error('NotificationRepository.markAsRead', e, st);
       throw mapToAppException(e);
     }
   }
 
-  Future<void> deleteNotification(
-      String notificationId, String requesterId) async {
+  Future<void> deleteNotification(String notificationId, String requesterId) async {
     try {
-      final doc =
-          await _db.collection('notifications').doc(notificationId).get();
-      if (!doc.exists) return;
-      // SECURITY: sirf apni hi notification delete kar sakte ho
-      if (doc.data()!['userId'] != requesterId) {
+      final doc = await _client
+          .from('notifications')
+          .select('user_id')
+          .eq('id', notificationId)
+          .maybeSingle();
+
+      if (doc == null) return;
+      if (doc['user_id'] != requesterId) {
         throw AppException('Aap ye notification delete nahi kar sakte.');
       }
-      await doc.reference.delete();
+
+      await _client.from('notifications').delete().eq('id', notificationId);
     } catch (e, st) {
       AppLogger.error('NotificationRepository.deleteNotification', e, st);
       throw mapToAppException(e);
@@ -77,16 +99,11 @@ class NotificationRepository {
 
   Future<void> markAllAsRead(String userId) async {
     try {
-      final unread = await _db
-          .collection('notifications')
-          .where('userId', isEqualTo: userId)
-          .where('read', isEqualTo: false)
-          .get();
-      final batch = _db.batch();
-      for (final doc in unread.docs) {
-        batch.update(doc.reference, {'read': true});
-      }
-      await batch.commit();
+      await _client
+          .from('notifications')
+          .update({'read': true})
+          .eq('user_id', userId)
+          .eq('read', false);
     } catch (e, st) {
       AppLogger.error('NotificationRepository.markAllAsRead', e, st);
       throw mapToAppException(e);

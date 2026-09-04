@@ -172,242 +172,274 @@ class _FindRoomScreenState extends State<FindRoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (userId != null)
-              Align(
-                alignment: Alignment.topRight,
-                child: NotificationBellIcon(userId: userId!),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Row(
+      body: Column(
+        children: [
+          Container(
+            color: _cherryRed,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _filterPropertyKind = 'residential';
-                        _filterPropCat = '';
-                        _filterTenantType = '';
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _filterPropertyKind == 'residential'
-                              ? _cherryRed
-                              : Colors.white,
-                          borderRadius: const BorderRadius.horizontal(
-                              left: Radius.circular(10)),
-                          border: Border.all(color: _cherryRed),
-                        ),
-                        child: Center(
-                          child: Text('Residential',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: _filterPropertyKind == 'residential'
-                                      ? Colors.white
-                                      : _cherryRed)),
-                        ),
+                  if (userId != null)
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: IconTheme(
+                        data: const IconThemeData(color: Colors.white),
+                        child: NotificationBellIcon(userId: userId!),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _filterPropertyKind = 'commercial';
-                        _filterPropCat = '';
-                        _filterTenantType = '';
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _filterPropertyKind == 'commercial'
-                              ? _cherryRed
-                              : Colors.white,
-                          borderRadius: const BorderRadius.horizontal(
-                              right: Radius.circular(10)),
-                          border: Border.all(color: _cherryRed),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() {
+                              _filterPropertyKind = 'residential';
+                              _filterPropCat = '';
+                              _filterTenantType = '';
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _filterPropertyKind == 'residential'
+                                    ? _cherryRed
+                                    : Colors.white,
+                                borderRadius: const BorderRadius.horizontal(
+                                    left: Radius.circular(10)),
+                                border: Border.all(color: Colors.white),
+                              ),
+                              child: Center(
+                                child: Text('Residential',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color:
+                                            _filterPropertyKind == 'residential'
+                                                ? Colors.white
+                                                : _cherryRed)),
+                              ),
+                            ),
+                          ),
                         ),
-                        child: Center(
-                          child: Text('Commercial',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: _filterPropertyKind == 'commercial'
-                                      ? Colors.white
-                                      : _cherryRed)),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() {
+                              _filterPropertyKind = 'commercial';
+                              _filterPropCat = '';
+                              _filterTenantType = '';
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _filterPropertyKind == 'commercial'
+                                    ? _cherryRed
+                                    : Colors.white,
+                                borderRadius: const BorderRadius.horizontal(
+                                    right: Radius.circular(10)),
+                                border: Border.all(color: Colors.white),
+                              ),
+                              child: Center(
+                                child: Text('Commercial',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color:
+                                            _filterPropertyKind == 'commercial'
+                                                ? Colors.white
+                                                : _cherryRed)),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
+          ),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Column(
                 children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.black87),
-                        decoration: InputDecoration(
-                          hintText: 'City, Area, Sub-area likho...',
-                          hintStyle: TextStyle(color: Colors.grey.shade500),
-                          prefixIcon:
-                              const Icon(Icons.search, color: _cherryRed),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear,
-                                      color: Colors.grey),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _searchArea = '';
-                                      _suggestions = [];
-                                    });
-                                  })
-                              : null,
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 0),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade300)),
-                          focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: _cherryRed)),
-                        ),
-                        // NAYA: Debouncing (API Optimization) + suggestions
-                        onChanged: (val) {
-                          final query = val.trim().toLowerCase();
-                          setState(() {
-                            _suggestions = query.isEmpty
-                                ? []
-                                : _areaSuggestionsList
-                                    .where((a) =>
-                                        a.toLowerCase().startsWith(query))
-                                    .take(5)
-                                    .toList();
-                          });
-                          if (_debounce?.isActive ?? false) _debounce!.cancel();
-                          _debounce =
-                              Timer(const Duration(milliseconds: 500), () {
-                            if (mounted) {
-                              setState(() => _searchArea = val.trim());
-                            }
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () => setState(() => _showFilters = !_showFilters),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                          color: _cherryRed,
-                          borderRadius: BorderRadius.circular(12)),
-                      child: Icon(
-                          _showFilters ? Icons.filter_list_off : Icons.tune,
-                          color: Colors.white,
-                          size: 24),
-                    ),
-                  )
-                ],
-              ),
-            ),
-            if (_hasActiveFilters())
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _resetAllFilters,
-                    icon: const Icon(Icons.filter_alt_off,
-                        size: 18, color: _cherryRed),
-                    label: const Text('Reset Filters',
-                        style: TextStyle(
-                            color: _cherryRed, fontWeight: FontWeight.w600)),
-                    style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  ),
-                ),
-              ),
-            if (_suggestions.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300)),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _suggestions
-                        .map((s) => ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.location_on_outlined,
-                                  color: _cherryRed, size: 20),
-                              title: Text(s),
-                              onTap: () {
-                                _searchController.text = s;
-                                _searchController.selection =
-                                    TextSelection.collapsed(offset: s.length);
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 56,
+                            child: TextField(
+                              controller: _searchController,
+                              style: const TextStyle(color: Colors.black87),
+                              decoration: InputDecoration(
+                                hintText: 'City, Area, Sub-area likho...',
+                                hintStyle:
+                                    TextStyle(color: Colors.grey.shade500),
+                                prefixIcon:
+                                    const Icon(Icons.search, color: _cherryRed),
+                                suffixIcon: _searchController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear,
+                                            color: Colors.grey),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchArea = '';
+                                            _suggestions = [];
+                                          });
+                                        })
+                                    : null,
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 0),
+                                enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey.shade300)),
+                                focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide:
+                                        const BorderSide(color: _cherryRed)),
+                              ),
+                              // NAYA: Debouncing (API Optimization) + suggestions
+                              onChanged: (val) {
+                                final query = val.trim().toLowerCase();
                                 setState(() {
-                                  _searchArea = s;
-                                  _suggestions = [];
+                                  _suggestions = query.isEmpty
+                                      ? []
+                                      : _areaSuggestionsList
+                                          .where((a) =>
+                                              a.toLowerCase().startsWith(query))
+                                          .take(5)
+                                          .toList();
+                                });
+                                if (_debounce?.isActive ?? false)
+                                  _debounce!.cancel();
+                                _debounce = Timer(
+                                    const Duration(milliseconds: 500), () {
+                                  if (mounted) {
+                                    setState(() => _searchArea = val.trim());
+                                  }
                                 });
                               },
-                            ))
-                        .toList(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _showFilters = !_showFilters),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                                color: _cherryRed,
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Icon(
+                                _showFilters
+                                    ? Icons.filter_list_off
+                                    : Icons.tune,
+                                color: Colors.white,
+                                size: 24),
+                          ),
+                        )
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            const SizedBox(height: 16),
-            if (_showFilters)
-              FilterPanel(
-                initialPropertyKind: _filterPropertyKind,
-                initialPropCat: _filterPropCat,
-                initialTenantType: _filterTenantType,
-                initialToilet: _filterToilet,
-                initialRentRange: _rentRange,
-                initialDepositRange: _depositRange,
-                onApply: (propCat, tenantType, toilet, rent, deposit) {
-                  setState(() {
-                    _filterPropCat = propCat;
-                    _filterTenantType = tenantType;
-                    _filterToilet = toilet;
-                    _rentRange = rent;
-                    _depositRange = deposit;
-                    _showFilters = false;
-                  });
-                },
-              ),
-            Expanded(
-              // NAYA: Ab EmptySearch UI block nahi karega, by default saare rooms dikhenge!
-              child: ListingResults(
-                area: _searchArea,
-                filterPropertyKind: _filterPropertyKind,
-                filterPropCat: _filterPropCat,
-                filterTenantType: _filterTenantType,
-                filterToilet: _filterToilet,
-                rentRange: _rentRange,
-                depositRange: _depositRange,
-                onResetFilters: _resetAllFilters,
+                  if (_hasActiveFilters())
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: _resetAllFilters,
+                          icon: const Icon(Icons.filter_alt_off,
+                              size: 18, color: _cherryRed),
+                          label: const Text('Reset Filters',
+                              style: TextStyle(
+                                  color: _cherryRed,
+                                  fontWeight: FontWeight.w600)),
+                          style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        ),
+                      ),
+                    ),
+                  if (_suggestions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _suggestions
+                              .map((s) => ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                        Icons.location_on_outlined,
+                                        color: _cherryRed,
+                                        size: 20),
+                                    title: Text(s),
+                                    onTap: () {
+                                      _searchController.text = s;
+                                      _searchController.selection =
+                                          TextSelection.collapsed(
+                                              offset: s.length);
+                                      setState(() {
+                                        _searchArea = s;
+                                        _suggestions = [];
+                                      });
+                                    },
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  if (_showFilters)
+                    FilterPanel(
+                      initialPropertyKind: _filterPropertyKind,
+                      initialPropCat: _filterPropCat,
+                      initialTenantType: _filterTenantType,
+                      initialToilet: _filterToilet,
+                      initialRentRange: _rentRange,
+                      initialDepositRange: _depositRange,
+                      onApply: (propCat, tenantType, toilet, rent, deposit) {
+                        setState(() {
+                          _filterPropCat = propCat;
+                          _filterTenantType = tenantType;
+                          _filterToilet = toilet;
+                          _rentRange = rent;
+                          _depositRange = deposit;
+                          _showFilters = false;
+                        });
+                      },
+                    ),
+                  Expanded(
+                    // NAYA: Ab EmptySearch UI block nahi karega, by default saare rooms dikhenge!
+                    child: ListingResults(
+                      area: _searchArea,
+                      filterPropertyKind: _filterPropertyKind,
+                      filterPropCat: _filterPropCat,
+                      filterTenantType: _filterTenantType,
+                      filterToilet: _filterToilet,
+                      rentRange: _rentRange,
+                      depositRange: _depositRange,
+                      onResetFilters: _resetAllFilters,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

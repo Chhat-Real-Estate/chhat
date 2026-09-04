@@ -16,10 +16,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
   final _phoneController = TextEditingController();
   bool _loading = false;
   bool _consentChecked = false; // NAYA: Checkbox track karne ke liye
+  late final TapGestureRecognizer _privacyPolicyRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _privacyPolicyRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        if (mounted) context.push('/privacy-policy');
+      };
+  }
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _privacyPolicyRecognizer.dispose(); // FIX #12: Prevent memory leak
     super.dispose();
   }
 
@@ -129,8 +140,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                         decoration: const InputDecoration(
                           hintText: 'Enter your mobile',
                           hintStyle: TextStyle(
-                              color:
-                                  Colors.white54), // NAYA: Lighter white hint
+                              color: Color(0xFF999999)), // FIX #23: Readable hint color on light surface
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
                               horizontal: 16, vertical: 18),
@@ -176,9 +186,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                                 color: Color(0xFF2D6A4F),
                                 fontWeight: FontWeight.bold,
                                 decoration: TextDecoration.underline),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () => context.push(
-                                  '/privacy-policy'), // NAYA: Link to policy
+                            recognizer: _privacyPolicyRecognizer,
                           ),
                           const TextSpan(text: '.'),
                         ],

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,11 +12,19 @@ import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
 import 'services/msg91_widget_bridge.dart';
 import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/config/supabase_config.dart';
+import 'services/auth_service.dart';
 
 void main() {
   runZonedGuarded(() async {
     final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
     FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
 
     // Flutter framework errors (widget build/layout/paint errors)
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -33,6 +42,13 @@ void main() {
 
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
+
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
+
+    await AuthService.init();
 
     // Debug mode mein Crashlytics collection off rakho, taaki testing ke
     // crashes production dashboard mein noise na banayein

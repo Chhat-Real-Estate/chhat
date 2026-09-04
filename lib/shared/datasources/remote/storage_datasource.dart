@@ -1,5 +1,5 @@
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 class StorageDatasource {
@@ -10,8 +10,7 @@ class StorageDatasource {
       source: ImageSource.gallery,
       maxWidth: 1080,
       maxHeight: 1080,
-      imageQuality:
-          80, // FIX: Ye automatic compress kar dega bina quality loss ke
+      imageQuality: 80,
     );
   }
 
@@ -20,16 +19,17 @@ class StorageDatasource {
       final bytes = await file.readAsBytes();
       final filename = '$ownerId/${const Uuid().v4()}.jpg';
 
-      // firebase_options.dart wala hi default bucket use ho raha hai
-      final ref =
-          FirebaseStorage.instance.ref().child('listings').child(filename);
+      final supabase = Supabase.instance.client;
+      await supabase.storage.from('listings').uploadBinary(
+            filename,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
 
-      final uploadTask = await ref.putData(
-        bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      return await uploadTask.ref.getDownloadURL();
+      return supabase.storage.from('listings').getPublicUrl(filename);
     } catch (e) {
       throw Exception('Upload failed: $e');
     }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/push_notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack; // NAYA: Parent tab change karne ke liye
@@ -44,21 +46,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
 
-      // Step 2: Firestore se fresh data background mein lao
+      // Step 2: Supabase se fresh data background mein lao
       if (userId != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .get()
-            .timeout(const Duration(seconds: 5));
+        final data = await Supabase.instance.client
+            .from('users')
+            .select()
+            .eq('id', userId)
+            .maybeSingle();
 
-        if (doc.exists && mounted) {
-          final data = doc.data()!;
+        if (data != null && mounted) {
           final freshName = data['name'] ?? cachedName;
           final freshPhone = data['phone'] ?? cachedPhone;
-          final freshRole = data['activeRole'] ?? cachedRole;
+          final freshRole = data['active_role'] ?? cachedRole;
 
-          // Cache update karo for next time
           await prefs.setString('userName', freshName);
           await prefs.setString('userRole', freshRole);
 
@@ -66,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _name = freshName;
             _phone = freshPhone;
             _activeRole = freshRole;
-            _roles = data['roles'] ?? [];
+            _roles = List<String>.from(data['roles'] ?? []);
           });
         }
       }
@@ -121,10 +121,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({'activeRole': targetRole});
+      await Supabase.instance.client
+          .from('users')
+          .update({'active_role': targetRole}).eq('id', userId);
+
+      await prefs.setString('userRole', targetRole);
+
       if (mounted) {
         Navigator.pop(context);
         if (_roles.contains(targetRole)) {
@@ -143,6 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    await PushNotificationService.dispose();
     await AuthService().signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
@@ -495,16 +498,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               final userId = prefs.getString('userId');
 
                               if (userId != null) {
-                                // Mark user as deleted in Firestore (Hard delete can be done via Firebase Functions later)
-                                await FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(userId)
+                                await Supabase.instance.client
+                                    .from('users')
                                     .update({
                                   'active': false,
-                                  'deletedAt': FieldValue.serverTimestamp()
-                                });
+                                  'deleted_at': DateTime.now().toIso8601String(),
+                                  'deletion_reason': 'User requested deletion',
+                                }).eq('id', userId);
                               }
 
+                              await PushNotificationService.dispose();
                               await AuthService().signOut();
                               await prefs.clear();
 

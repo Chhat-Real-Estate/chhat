@@ -1,88 +1,100 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/request_model.dart';
 import '../../../core/utils/app_logger.dart';
 
 class RequestRepository {
-  final FirebaseFirestore _db;
-  RequestRepository({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+  final SupabaseClient _client;
+  RequestRepository({SupabaseClient? client, dynamic firestore})
+      : _client = client ?? Supabase.instance.client;
 
-  // Request bheje (Tenant ya Owner)
-  // FIX: TOCTOU race — pehle check + add alag calls the, rapid double-tap se
-  // duplicate ban sakti thi. Ab deterministic doc ID + transaction se atomic
-  // hai — dusri baar wahi ID pe write hi nahi hoga.
+  // Send request
   Future<void> sendRequest(RequestModel request) async {
-    final docId =
-        '${request.tenantId}_${request.listingId}_${request.senderType}';
-    final docRef = _db.collection('requests').doc(docId);
+    try {
+      // Check duplicate
+      final existing = await _client
+          .from('requests')
+          .select('id')
+          .eq('tenant_id', request.tenantId)
+          .eq('listing_id', request.listingId)
+          .eq('sender_type', request.senderType)
+          .maybeSingle();
 
-    await _db.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (snapshot.exists) {
+      if (existing != null) {
         throw Exception('Aapne pehle se request bheji hai');
       }
-      transaction.set(docRef, request.toMap());
-    });
+
+      await _client.from('requests').insert(request.toMap());
+    } catch (e, st) {
+      AppLogger.error('RequestRepository.sendRequest', e, st);
+      rethrow;
+    }
   }
 
-  // Owner ki saari incoming requests (Jo sirf TENANT ne bheji hain)
+  // Owner incoming requests (sent by tenant)
   Stream<List<RequestModel>> getOwnerRequests(String ownerId) {
-    return _db
-        .collection('requests')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('senderType', isEqualTo: 'tenant')
-        .orderBy('createdAt', descending: true)
+    return _client
+        .from('requests')
+        .stream(primaryKey: ['id'])
+        .eq('owner_id', ownerId)
+        .order('created_at', ascending: false)
         .limit(50)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => RequestModel.fromMap(doc.data(), doc.id))
-            .toList());
-  }
-
-  // Owner ki Sent requests (Jo sirf OWNER ne khud bheji hain)
-  Stream<List<RequestModel>> getOwnerSentRequests(String ownerId) {
-    return _db
-        .collection('requests')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('senderType', isEqualTo: 'owner')
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => RequestModel.fromMap(doc.data(), doc.id))
-            .toList());
-  }
-
-  // Tenant ki INCOMING requests (Jo OWNER ne bheji hain)
-  Stream<List<RequestModel>> getTenantIncomingRequests(String tenantId) {
-    return _db
-        .collection('requests')
-        .where('tenantId', isEqualTo: tenantId)
-        .where('senderType', isEqualTo: 'owner')
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => RequestModel.fromMap(doc.data(), doc.id))
+        .map((data) => data
+            .where((item) => item['sender_type'] == 'tenant')
+            .map((item) => RequestModel.fromMap(item, item['id'].toString()))
             .toList())
         .handleError((error) {
-      AppLogger.error(
-          'RequestRepository.getOwnerIncomingRequests', error, null);
+      AppLogger.error('RequestRepository.getOwnerRequests', error, null);
       return <RequestModel>[];
     });
   }
 
-  // Tenant ki SENT requests (Jo TENANT ne khud bheji hain)
-  Stream<List<RequestModel>> getTenantSentRequests(String tenantId) {
-    return _db
-        .collection('requests')
-        .where('tenantId', isEqualTo: tenantId)
-        .where('senderType', isEqualTo: 'tenant')
-        .orderBy('createdAt', descending: true)
+  // Owner sent requests (sent by owner)
+  Stream<List<RequestModel>> getOwnerSentRequests(String ownerId) {
+    return _client
+        .from('requests')
+        .stream(primaryKey: ['id'])
+        .eq('owner_id', ownerId)
+        .order('created_at', ascending: false)
         .limit(50)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => RequestModel.fromMap(doc.data(), doc.id))
+        .map((data) => data
+            .where((item) => item['sender_type'] == 'owner')
+            .map((item) => RequestModel.fromMap(item, item['id'].toString()))
+            .toList())
+        .handleError((error) {
+      AppLogger.error('RequestRepository.getOwnerSentRequests', error, null);
+      return <RequestModel>[];
+    });
+  }
+
+  // Tenant incoming requests (sent by owner)
+  Stream<List<RequestModel>> getTenantIncomingRequests(String tenantId) {
+    return _client
+        .from('requests')
+        .stream(primaryKey: ['id'])
+        .eq('tenant_id', tenantId)
+        .order('created_at', ascending: false)
+        .limit(50)
+        .map((data) => data
+            .where((item) => item['sender_type'] == 'owner')
+            .map((item) => RequestModel.fromMap(item, item['id'].toString()))
+            .toList())
+        .handleError((error) {
+      AppLogger.error('RequestRepository.getTenantIncomingRequests', error, null);
+      return <RequestModel>[];
+    });
+  }
+
+  // Tenant sent requests (sent by tenant)
+  Stream<List<RequestModel>> getTenantSentRequests(String tenantId) {
+    return _client
+        .from('requests')
+        .stream(primaryKey: ['id'])
+        .eq('tenant_id', tenantId)
+        .order('created_at', ascending: false)
+        .limit(50)
+        .map((data) => data
+            .where((item) => item['sender_type'] == 'tenant')
+            .map((item) => RequestModel.fromMap(item, item['id'].toString()))
             .toList())
         .handleError((error) {
       AppLogger.error('RequestRepository.getTenantSentRequests', error, null);
@@ -90,48 +102,63 @@ class RequestRepository {
     });
   }
 
-  // Owner accept/reject kare — SECURITY FIX (IDOR): sirf ownerId ya tenantId
-  // wala hi apni request update kar sakta hai
+  // Update request status (accept / reject)
   Future<void> updateRequestStatus(
-      String requestId, String status, String requesterId,
-      {String? tenantPhone}) async {
-    final doc = await _db.collection('requests').doc(requestId).get();
-    if (!doc.exists) {
-      throw Exception('Request nahi mili');
+    String requestId,
+    String status,
+    String requesterId, {
+    String? tenantPhone,
+  }) async {
+    try {
+      final doc = await _client
+          .from('requests')
+          .select('owner_id, tenant_id')
+          .eq('id', requestId)
+          .maybeSingle();
+
+      if (doc == null) {
+        throw Exception('Request nahi mili');
+      }
+
+      if (doc['owner_id'] != requesterId && doc['tenant_id'] != requesterId) {
+        throw Exception('Aapko is request ko update karne ki permission nahi hai');
+      }
+
+      final updateData = <String, dynamic>{
+        'status': status,
+        'responded_by': requesterId,
+        'responded_at': DateTime.now().toIso8601String(),
+      };
+
+      if (tenantPhone != null && tenantPhone.isNotEmpty) {
+        updateData['tenant_phone'] = tenantPhone;
+      }
+
+      await _client.from('requests').update(updateData).eq('id', requestId);
+    } catch (e, st) {
+      AppLogger.error('RequestRepository.updateRequestStatus', e, st);
+      rethrow;
     }
-    final data = doc.data()!;
-    if (data['ownerId'] != requesterId && data['tenantId'] != requesterId) {
-      throw Exception(
-          'Aapko is request ko update karne ki permission nahi hai');
-    }
-    final updateData = <String, dynamic>{
-      'status': status,
-      'respondedBy': requesterId,
-      'respondedAt': FieldValue.serverTimestamp(),
-    };
-    // FIX: Owner ne invite bheja tha to tenantPhone 'Hidden' save hua tha
-    // (owner ko tenant ka number pata nahi hota). Ab tenant khud accept
-    // kar raha hai, to apna asli number yahin fill kar do taaki owner
-    // baad me call kar sake.
-    if (tenantPhone != null && tenantPhone.isNotEmpty) {
-      updateData['tenantPhone'] = tenantPhone;
-    }
-    await doc.reference.update(updateData);
   }
 
-  // NAYA: Request Delete karo (Dono side se permanently gayab ho jayegi)
-  // SECURITY FIX (IDOR): sirf ownerId ya tenantId wala hi delete kar sakta hai
+  // Delete request
   Future<void> deleteRequest(String requestId, String requesterId) async {
     try {
-      final doc = await _db.collection('requests').doc(requestId).get();
-      if (!doc.exists) return;
-      final data = doc.data()!;
-      if (data['ownerId'] != requesterId && data['tenantId'] != requesterId) {
-        throw Exception(
-            'Aapko is request ko delete karne ki permission nahi hai');
+      final doc = await _client
+          .from('requests')
+          .select('owner_id, tenant_id')
+          .eq('id', requestId)
+          .maybeSingle();
+
+      if (doc == null) return;
+
+      if (doc['owner_id'] != requesterId && doc['tenant_id'] != requesterId) {
+        throw Exception('Aapko is request ko delete karne ki permission nahi hai');
       }
-      await doc.reference.delete();
-    } catch (e) {
+
+      await _client.from('requests').delete().eq('id', requestId);
+    } catch (e, st) {
+      AppLogger.error('RequestRepository.deleteRequest', e, st);
       throw Exception('Request delete karne me error aayi: $e');
     }
   }

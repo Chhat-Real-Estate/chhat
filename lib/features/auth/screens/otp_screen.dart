@@ -4,10 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:smart_auth/smart_auth.dart';
 import '../../../services/msg91_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/utils/app_logger.dart';
+
+import 'package:uuid/uuid.dart';
+import '../../../services/auth_service.dart';
 
 class OtpScreen extends StatefulWidget {
   final String verificationId;
@@ -22,6 +26,7 @@ class OtpScreen extends StatefulWidget {
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
+
 
 class _OtpScreenState extends State<OtpScreen> {
   final _otpController = TextEditingController();
@@ -256,47 +261,54 @@ class _OtpScreenState extends State<OtpScreen> {
 
     setState(() => _loading = true);
 
-    // Google Play review ke liye reserved test-account — MSG91 poori tarah
-    // skip karke seedha backend se verify karta hai.
+    String cleanPhone =
+        widget.phoneNumber.trim().replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
+    }
+    final normalizedPhone = '+91$cleanPhone';
+
+    // Google Play review test-account bypass
     const testPhone = '9999999999';
     const testOtp = '123456';
-    if (widget.phoneNumber.trim() == testPhone && enteredOtp == testOtp) {
-      try {
-        final result = await Msg91Service.verifyTestAccount(testPhone, testOtp);
-        final customToken = result['customToken'].toString();
-        final uid = result['uid'].toString();
-        await FirebaseAuth.instance.signInWithCustomToken(customToken);
-        await _handleLoginSuccess(widget.phoneNumber, uid);
-      } catch (e, st) {
-        AppLogger.error('OtpScreen.verifyTestAccount', e, st);
-        if (mounted) {
-          setState(() => _loading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Verification failed. Try again.')),
-          );
-        }
-      }
+    if (cleanPhone == testPhone && enteredOtp == testOtp) {
+      final uid = const Uuid().v5(Uuid.NAMESPACE_URL, 'phone:+91$testPhone');
+      await _handleLoginSuccess(normalizedPhone, uid);
       return;
     }
 
     try {
-      final accessToken = await Msg91Service.verifyOtp(_reqId, enteredOtp);
-      final result = await Msg91Service.verifyWithBackend(accessToken);
+      // MSG91 Widget verifies OTP in WebView against MSG91 servers
+      await Msg91Service.verifyOtp(_reqId, enteredOtp);
 
-      final customToken = result['customToken'].toString();
-      final uid = result['uid'].toString();
+      // Deterministic UUID for user based on phone number
+      final supabase = Supabase.instance.client;
+      String uid;
+      try {
+        final existing = await supabase
+            .from('users')
+            .select('id')
+            .eq('phone', normalizedPhone)
+            .maybeSingle();
+        if (existing != null && existing['id'] != null) {
+          uid = existing['id'].toString();
+        } else {
+          uid = const Uuid().v5(Uuid.NAMESPACE_URL, 'phone:$normalizedPhone');
+        }
+      } catch (_) {
+        uid = const Uuid().v5(Uuid.NAMESPACE_URL, 'phone:$normalizedPhone');
+      }
 
-      await FirebaseAuth.instance.signInWithCustomToken(customToken);
-
-      await _handleLoginSuccess(widget.phoneNumber, uid);
+      await _handleLoginSuccess(normalizedPhone, uid);
     } catch (e, st) {
       AppLogger.error('OtpScreen.verifyOtp', e, st);
       if (mounted) {
         setState(() => _loading = false);
+        final errText = e.toString().toLowerCase().contains('otp')
+            ? 'Galat OTP hai ya expire ho gaya. Wapas try karo.'
+            : e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Galat OTP hai ya expire ho gaya. Wapas try karo.')),
+          SnackBar(content: Text(errText)),
         );
       }
     }
@@ -304,53 +316,45 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _handleLoginSuccess(String phone, String uid) async {
     try {
-      // NAYA: API Optimization & Caching (Save locally immediately)
       final prefs = await SharedPreferences.getInstance();
       String normalizedPhone = phone.trim();
       if (!normalizedPhone.startsWith('+91')) {
         normalizedPhone = '+91$normalizedPhone';
       }
-      await prefs.setString('savedUserId', uid);
-      await prefs.setString('userId', uid);
-      await prefs.setString('userPhone', normalizedPhone);
 
-      final db = FirebaseFirestore.instance;
-      final docRef = db.collection('users').doc(uid);
+      // Save in AuthService & SharedPreferences
+      await AuthService.setSession(userId: uid, phone: normalizedPhone);
 
-      // FIX: Login jaisi critical check ke liye hamesha server se confirm
-      // karo — 'serverAndCache' kabhi-kabhi device ke purane local cache se
-      // stale data de deta tha (jaise Firestore console se data delete karne
-      // ke baad bhi purana role/profile dikh jaata tha).
-      final doc = await docRef.get(const GetOptions(source: Source.server));
+      final supabase = Supabase.instance.client;
+      final existingUser = await supabase
+          .from('users')
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
 
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-
-        // FIX: Sirf tabhi write karo jab consentVersion actually badla ho —
-        // pehle har login pe unconditional write hota tha
+      if (existingUser != null) {
         final consentVersion = prefs.getString('consentVersion') ?? '1.0';
-        if (data['consentVersion'] != consentVersion) {
+        if (existingUser['consent_version'] != consentVersion) {
           final consentGivenAtStr = prefs.getString('consentGivenAt');
           final consentGivenAt = consentGivenAtStr != null
               ? DateTime.parse(consentGivenAtStr)
               : DateTime.now();
 
-          await docRef.update({
-            'consentVersion': consentVersion,
-            'consentGivenAt': consentGivenAt,
-          });
+          await supabase.from('users').update({
+            'consent_version': consentVersion,
+            'consent_given_at': consentGivenAt.toIso8601String(),
+          }).eq('id', uid);
         }
 
-        // Cache save karo — profile pe instant load ke liye
-        await prefs.setString('userName', data['name'] ?? '');
+        await prefs.setString('userName', existingUser['name'] ?? '');
         await prefs.setString(
-            'userRole', data['activeRole'] ?? data['role'] ?? 'tenant');
+            'userRole', existingUser['active_role'] ?? 'tenant');
 
         if (mounted) {
           setState(() => _loading = false);
 
-          if (data['profileComplete'] == true) {
-            final role = data['activeRole'] ?? data['role'];
+          if (existingUser['profile_complete'] == true) {
+            final role = existingUser['active_role'];
             if (role != null && role.toString().isNotEmpty) {
               context.go('/$role-home');
             } else {
@@ -361,28 +365,20 @@ class _OtpScreenState extends State<OtpScreen> {
           }
         }
       } else {
-        // NAYA: Naye user ke liye DPDP consent details Firestore me save karo
         final consentVersion = prefs.getString('consentVersion') ?? '1.0';
         final consentGivenAtStr = prefs.getString('consentGivenAt');
         final consentGivenAt = consentGivenAtStr != null
             ? DateTime.parse(consentGivenAtStr)
             : DateTime.now();
 
-        // Naya User create karo
-        // Normalize: '+91' sirf ek baar
-        String normalizedPhone = phone.trim();
-        if (!normalizedPhone.startsWith('+91')) {
-          normalizedPhone = '+91$normalizedPhone';
-        }
-
-        await docRef.set({
+        await supabase.from('users').insert({
+          'id': uid,
           'phone': normalizedPhone,
-          'profileComplete': false,
+          'profile_complete': false,
           'active': true,
-          'consentVersion': consentVersion, // DPDP Compliance
-          'consentGivenAt': consentGivenAt, // DPDP Compliance
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'roles': <String>[],
+          'consent_version': consentVersion,
+          'consent_given_at': consentGivenAt.toIso8601String(),
         });
 
         if (mounted) {
@@ -395,9 +391,9 @@ class _OtpScreenState extends State<OtpScreen> {
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Login failed due to network error.')), // NAYA: Error handling
+          SnackBar(
+            content: Text('Login error: $e'),
+          ),
         );
       }
     }

@@ -5,9 +5,12 @@ import 'package:image_picker/image_picker.dart'; // Photo Picker
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:cloud_firestore/cloud_firestore.dart'; // Database
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Local Storage
 import '../../../shared/datasources/remote/storage_datasource.dart'; // FIX: Storage API Add kiya
 import '../../../core/constants/property_options.dart'; // NAYA IMPORT
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class OwnerOnboardingScreen extends StatefulWidget {
   const OwnerOnboardingScreen({super.key});
@@ -214,92 +217,80 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
       if (userId == null) {
         throw Exception('Session expire ho gaya, dobara login karo');
       }
-      final firestore = FirebaseFirestore.instance;
+      final supabase = Supabase.instance.client;
 
-      // Phone: SharedPrefs se lo, normalize karo (+91 ek hi baar)
       String rawPhone =
           prefs.getString('userPhone') ?? _phoneController.text.trim();
       if (!rawPhone.startsWith('+91')) {
         rawPhone = '+91$rawPhone';
       }
 
-      // 1, 2, 3 ko ek hi batch me atomic banaya — partial write nahi hoga
-      final batch = firestore.batch();
+      // 1. Users table update karo
+      await supabase.from('users').update({
+        'name': _nameController.text.trim(),
+        'phone': rawPhone,
+        'profile_complete': true,
+        'active_role': 'owner',
+        'roles': ['owner'],
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
 
-      batch.set(
-        firestore.collection('users').doc(userId),
-        {
-          'name': _nameController.text.trim(),
-          'phone': rawPhone,
-          'profileComplete': true,
-          'activeRole': 'owner',
-          'roles': FieldValue.arrayUnion(['owner']),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      // 2. Owner profile update karo
+      await supabase.from('owner_profiles').upsert({
+        'user_id': userId,
+        'name': _nameController.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
 
-      batch.set(
-        firestore.collection('ownerProfiles').doc(userId),
-        {
-          'name': _nameController.text.trim(),
-          'phone': rawPhone,
-          'city': _cityController.text.trim(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-
-      final docRef = firestore.collection('listings').doc();
-      batch.set(docRef, {
-        'ownerId': userId,
-        'propertyKind': _propertyKind,
-        'propertyCategory': _propertyCategory,
-        'furnishingStatus': _furnishingStatus,
-        'parkingType': _parkingType,
+      // 3. First Listing create karo
+      final insertedListing = await supabase.from('listings').insert({
+        'owner_id': userId,
+        'property_kind': _propertyKind,
+        'property_category': _propertyCategory,
+        'furnishing_status': _furnishingStatus,
+        'parking_type': _parkingType,
+        'phone': rawPhone,
         'city': _cityController.text.trim(),
-        'area': _areaController.text.trim(),
-        'subArea': _subAreaController.text.trim(),
+        'area': _areaController.text.trim().toLowerCase(),
+        'sub_area': _subAreaController.text.trim(),
         'landmark': _landmarkController.text.trim(),
-        'distanceKm': double.tryParse(_distanceController.text.trim()) ?? 0.0,
+        'distance_km': double.tryParse(_distanceController.text.trim()) ?? 0.0,
         'rent': int.tryParse(_rentController.text.trim()) ?? 0,
         'deposit': int.tryParse(_depositController.text.trim()) ?? 0,
-        'sizeSqft': int.tryParse(_sizeController.text.trim()) ?? 0,
+        'size_sqft': int.tryParse(_sizeController.text.trim()) ?? 0,
         'floor': _floorController.text.trim(),
         'occupancy': int.tryParse(_occupancyController.text.trim()) ?? 0,
         'facilities': _selectedFacilities,
-        'allowedTenants': _selectedTenants,
+        'allowed_tenants': _selectedTenants,
         'restrictions': _selectedRestrictions,
         'availability': _availability,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'active', // Live on app
+        'created_at': DateTime.now().toIso8601String(),
         'active': true,
-        'photos': [], // Temporary empty
-        'builtUpArea': _builtUpAreaController.text.trim(),
-        'superBuiltUpArea': _superBuiltUpAreaController.text.trim(),
-        'plotArea': _plotAreaController.text.trim(),
-        'totalFloors': _totalFloorsController.text.trim(),
-        'ceilingHeight': _ceilingHeightController.text.trim(),
+        'photos': <String>[],
+        'built_up_area': _builtUpAreaController.text.trim(),
+        'super_built_up_area': _superBuiltUpAreaController.text.trim(),
+        'plot_area': _plotAreaController.text.trim(),
+        'total_floors': _totalFloorsController.text.trim(),
+        'ceiling_height': _ceilingHeightController.text.trim(),
         'frontage': _frontageController.text.trim(),
-        'roadWidth': _roadWidthController.text.trim(),
-        'suitableFor': _suitableFor,
+        'road_width': _roadWidthController.text.trim(),
+        'suitable_for': _suitableFor,
         'utilities': _utilities,
-        'buildingGrade': _buildingGrade,
-        'buildingAge': _buildingAge,
+        'building_grade': _buildingGrade,
+        'building_age': _buildingAge,
         'possession': _possession,
         'ownership': _ownership,
         'visibility': _visibility,
-      });
+      }).select('id').single();
 
-      await batch.commit();
+      final newListingId = insertedListing['id'].toString();
 
       // Cache bhi update karo (batch commit ke baad)
       await prefs.setString('userName', _nameController.text.trim());
       await prefs.setString('userRole', 'owner');
       await prefs.setString('userPhone', rawPhone);
 
-      // FIX ISSUE #2: Actual Firebase Storage Upload — parallel, aur failure
-      // ab silently swallow nahi hoti
+      // Upload photos to Supabase Storage
       final storage = StorageDatasource();
       final photosToUpload = _selectedPhotos.whereType<XFile>().toList();
       final uploadResults = await Future.wait(
@@ -316,7 +307,9 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
 
       // Update document with actual secure URLs
       if (uploadedUrls.isNotEmpty) {
-        await docRef.update({'photos': uploadedUrls});
+        await supabase
+            .from('listings')
+            .update({'photos': uploadedUrls}).eq('id', newListingId);
       }
 
       if (mounted) {
@@ -373,16 +366,25 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
               Navigator.pop(ctx);
               try {
                 final prefs = await SharedPreferences.getInstance();
-                final userId = prefs.getString('userId') ?? 'unknown_user';
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(userId)
-                    .set({
-                  'activeRole': 'owner',
-                  'roles': FieldValue.arrayUnion(['owner']),
-                  'profileComplete': true,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+                final userId = prefs.getString('userId');
+                // SECURITY FIX #6: unknown_user fallback hataya
+                if (userId == null || userId.isEmpty) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Session expire ho gaya, dobara login karo')),
+                    );
+                    context.go('/phone');
+                  }
+                  return;
+                }
+                await Supabase.instance.client
+                    .from('users')
+                    .update({
+                  'active_role': 'owner',
+                  'roles': ['owner'],
+                  'profile_complete': true,
+                  'updated_at': DateTime.now().toIso8601String(),
+                }).eq('id', userId);
                 await prefs.setString('userRole', 'owner');
               } catch (_) {}
               if (mounted) context.go('/owner-home');
@@ -396,11 +398,80 @@ class _OwnerOnboardingScreenState extends State<OwnerOnboardingScreen> {
 
   Future<void> _fetchCurrentLocation() async {
     setState(() => _isFetchingLocation = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _isFetchingLocation = false;
-      _areaController.text = "Barkat Ali Nagar, Wadala East";
-    });
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enable device location services.')),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permission denied.')),
+            );
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied. Please enable in settings.')),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        final subLocality = place.subLocality ?? place.thoroughfare ?? '';
+        final locality = place.locality ?? place.subAdministrativeArea ?? '';
+        final detectedCity = place.locality ?? place.administrativeArea ?? '';
+
+        final areaText = [subLocality, locality].where((s) => s.trim().isNotEmpty).join(', ');
+
+        if (mounted) {
+          setState(() {
+            if (areaText.isNotEmpty) {
+              _areaController.text = areaText;
+            }
+            if (detectedCity.isNotEmpty && _cityController.text.trim().isEmpty) {
+              _cityController.text = detectedCity;
+            }
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location detected successfully!'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not detect location: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isFetchingLocation = false);
+    }
   }
 
   @override

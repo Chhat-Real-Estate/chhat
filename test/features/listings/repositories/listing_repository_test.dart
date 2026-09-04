@@ -3,9 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chhat/features/listings/repositories/listing_repository.dart';
 import 'package:chhat/core/utils/app_exceptions.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:chhat/core/config/supabase_config.dart';
+
 void main() {
   late FakeFirebaseFirestore fakeDb;
   late ListingRepository repo;
+
+  setUpAll(() async {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
+  });
 
   setUp(() {
     fakeDb = FakeFirebaseFirestore();

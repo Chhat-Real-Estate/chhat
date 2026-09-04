@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart'; // NAYA: Mouse drag support ke liye
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../features/listings/models/listing_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../features/reports/repositories/report_repository.dart';
@@ -108,30 +109,31 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
 
       final userPhone = prefs.getString('userPhone') ?? 'Hidden';
 
-      // NAYA: Direct Raw Map Insert lagaya taaki Model mapping ka issue hamesha ke liye solve ho jaye
-      final existing = await FirebaseFirestore.instance
-          .collection('requests')
-          .where('tenantId', isEqualTo: userId)
-          .where('listingId', isEqualTo: widget.listing.id)
-          .where('senderType',
-              isEqualTo: 'tenant') // FIX: Sirf tenant ki duplicate check karega
-          .get();
+      final supabase = Supabase.instance.client;
 
-      if (existing.docs.isNotEmpty) {
+      final existing = await supabase
+          .from('requests')
+          .select('id')
+          .eq('tenant_id', userId)
+          .eq('listing_id', widget.listing.id!)
+          .eq('sender_type', 'tenant')
+          .maybeSingle();
+
+      if (existing != null) {
         throw Exception(
             'Aap is room ke liye pehle se request bhej chuke hain!');
       }
 
-      await FirebaseFirestore.instance.collection('requests').add({
-        'tenantId': userId,
-        'tenantPhone': userPhone,
-        'listingId': widget.listing.id,
-        'ownerId': widget.listing.ownerId,
+      await supabase.from('requests').insert({
+        'tenant_id': userId,
+        'tenant_phone': userPhone,
+        'listing_id': widget.listing.id,
+        'owner_id': widget.listing.ownerId,
         'area': widget.listing.area,
         'rent': widget.listing.rent,
-        'senderType': 'tenant',
+        'sender_type': 'tenant',
         'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
+        'created_at': DateTime.now().toIso8601String(),
       });
 
       // NOTE: notification yahan client se nahi banate — index.js ka

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
@@ -97,55 +98,42 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
   }
 }
 
-// --- SHARED TIMELINE WIDGET ---
+// --- SHARED STATUS ROW ---
 Widget _buildTimeline(RequestModel req) {
   final isPending = req.status == 'pending';
   final isAccepted = req.status == 'accepted';
   final statusColor = isPending
       ? Colors.orange
       : (isAccepted ? Colors.green : Colors.redAccent);
+  final statusLabel =
+      isPending ? 'Pending' : (isAccepted ? 'Accepted' : 'Rejected');
+  final statusIcon = isPending
+      ? Icons.access_time_filled
+      : (isAccepted ? Icons.check_circle : Icons.cancel);
   final dateStr = req.createdAt.toString().substring(0, 16);
 
   return Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     margin: const EdgeInsets.symmetric(vertical: 12),
     decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200)),
-    child: Column(
+        color: statusColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8)),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.blue, size: 18),
-            Expanded(
-                child:
-                    Container(height: 3, color: statusColor.withOpacity(0.4))),
-            Icon(
-                isPending
-                    ? Icons.access_time_filled
-                    : (isAccepted ? Icons.check_circle : Icons.cancel),
-                color: statusColor,
-                size: 18),
+            Icon(statusIcon, color: statusColor, size: 18),
+            const SizedBox(width: 6),
+            Text(statusLabel,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor)),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Sent\n$dateStr',
-                style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            Text(
-                isPending
-                    ? 'Pending\nWaiting...'
-                    : (isAccepted ? 'Accepted\nDone' : 'Rejected\nClosed'),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: statusColor,
-                    fontWeight: FontWeight.bold)),
-          ],
-        )
+        Text('Sent: $dateStr',
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     ),
   );
@@ -224,10 +212,10 @@ class _IncomingRequestsTabState extends State<IncomingRequestsTab> {
                           borderRadius: BorderRadius.circular(12)))));
         }
 
-        if (snapshot.hasError) {
-          return Center(
-              child: Text('Error loading requests.',
-                  style: TextStyle(color: Colors.red.shade400)));
+        if (snapshot.hasError && !snapshot.hasData) {
+          return const Center(
+              child: Text('Abhi koi active request nahi aayi',
+                  style: TextStyle(color: Colors.grey)));
         }
 
         final requests = snapshot.data ?? [];
@@ -309,6 +297,10 @@ class _IncomingRequestsTabState extends State<IncomingRequestsTab> {
                                     ? 'Tenant number available nahi hai'
                                     : 'Call Tenant: ${req.tenantPhone}',
                                 style: const TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1E88E5),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6))),
                           ),
                           if (req.tenantPhone.isNotEmpty &&
                               req.tenantPhone != 'Hidden') ...[
@@ -428,10 +420,10 @@ class _SentRequestsTabState extends State<SentRequestsTab> {
                           borderRadius: BorderRadius.circular(12)))));
         }
 
-        if (snapshot.hasError) {
-          return Center(
-              child: Text('Error loading requests.',
-                  style: TextStyle(color: Colors.red.shade400)));
+        if (snapshot.hasError && !snapshot.hasData) {
+          return const Center(
+              child: Text('Aapne koi active invite nahi bheja hai.',
+                  style: TextStyle(color: Colors.grey)));
         }
 
         final requests = snapshot.data ?? [];
@@ -581,14 +573,13 @@ class _TenantNameTextState extends State<_TenantNameText> {
       _name = 'Loading...';
     });
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('tenantProfiles')
-          .doc(widget.tenantId)
-          .get()
-          .timeout(const Duration(seconds: 5));
-      final name = doc.exists
-          ? (doc.data() as Map<String, dynamic>)['name'] as String?
-          : null;
+      final data = await Supabase.instance.client
+          .from('tenant_profiles')
+          .select('name')
+          .eq('user_id', widget.tenantId)
+          .maybeSingle();
+
+      final name = data?['name'] as String?;
       if (mounted) {
         setState(() =>
             _name = (name == null || name.isEmpty) ? 'Unknown Tenant' : name);

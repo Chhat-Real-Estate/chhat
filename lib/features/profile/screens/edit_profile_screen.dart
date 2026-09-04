@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 
@@ -56,33 +57,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final userId = prefs.getString('userId');
       if (userId == null) return;
 
-      final firestore = FirebaseFirestore.instance;
+      final supabase = Supabase.instance.client;
 
-      // 1. Pehle 'users' collection se Name aur Phone fetch karo (Kyunki ye humesha exist karega)
-      final userDoc = await firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final userData = userDoc.data()!;
+      // 1. users table se data fetch karo
+      final userData = await supabase
+          .from('users')
+          .select('name, phone')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (userData != null) {
         _nameController.text = userData['name'] ?? '';
         _phoneController.text = userData['phone'] ?? userId;
       }
 
-      // 2. Ab specific profile collection se baaki data fetch karo
-      final collectionName =
-          widget.activeRole == 'tenant' ? 'tenantProfiles' : 'ownerProfiles';
-      final profileDoc =
-          await firestore.collection(collectionName).doc(userId).get();
+      // 2. Specific profile table se baaki data fetch karo
+      final tableName =
+          widget.activeRole == 'tenant' ? 'tenant_profiles' : 'owner_profiles';
+      final profileData = await supabase
+          .from(tableName)
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (profileDoc.exists) {
-        final profileData = profileDoc.data()!;
-
-        // Agar users me name empty tha, toh profile se utha lo
+      if (profileData != null) {
         if (_nameController.text.isEmpty) {
           _nameController.text = profileData['name'] ?? '';
         }
-
         _cityController.text = profileData['city'] ?? '';
         _areaController.text = profileData['area'] ?? '';
-        _subAreaController.text = profileData['subArea'] ?? '';
+        _subAreaController.text = (profileData['sub_area'] ?? profileData['subArea']) ?? '';
 
         if (widget.activeRole == 'tenant') {
           _ageController.text = (profileData['age'] ?? '').toString();
@@ -104,33 +108,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final userId = prefs.getString('userId');
       if (userId == null) return;
 
-      final firestore = FirebaseFirestore.instance;
-      final collectionName =
-          widget.activeRole == 'tenant' ? 'tenantProfiles' : 'ownerProfiles';
+      final supabase = Supabase.instance.client;
+      final tableName =
+          widget.activeRole == 'tenant' ? 'tenant_profiles' : 'owner_profiles';
 
-      // NAYA: Ab Name aur Age bhi update honge
       Map<String, dynamic> updateData = {
+        'user_id': userId,
         'name': _nameController.text.trim(),
         'city': _cityController.text.trim(),
         'area': _areaController.text.trim(),
-        'subArea': _subAreaController.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'sub_area': _subAreaController.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
       };
 
       if (widget.activeRole == 'tenant') {
-        updateData['age'] = _ageController.text.trim();
+        updateData['age'] = int.tryParse(_ageController.text.trim()) ?? 0;
         updateData['gender'] = _selectedGender;
       }
 
-      await firestore
-          .collection(collectionName)
-          .doc(userId)
-          .set(updateData, SetOptions(merge: true));
+      await supabase.from(tableName).upsert(updateData);
 
-      // Main users table me bhi name update karo
-      await firestore.collection('users').doc(userId).update({
+      await supabase.from('users').update({
         'name': _nameController.text.trim(),
-      });
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

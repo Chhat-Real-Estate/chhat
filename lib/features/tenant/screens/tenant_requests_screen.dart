@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../requests/repositories/request_repository.dart';
@@ -99,55 +100,42 @@ class _TenantRequestsScreenState extends State<TenantRequestsScreen> {
   }
 }
 
-// --- SHARED TIMELINE WIDGET ---
+// --- SHARED STATUS ROW ---
 Widget _buildTimeline(RequestModel req) {
   final isPending = req.status == 'pending';
   final isAccepted = req.status == 'accepted';
   final statusColor = isPending
       ? Colors.orange
       : (isAccepted ? Colors.green : Colors.redAccent);
+  final statusLabel =
+      isPending ? 'Pending' : (isAccepted ? 'Accepted' : 'Rejected');
+  final statusIcon = isPending
+      ? Icons.access_time_filled
+      : (isAccepted ? Icons.check_circle : Icons.cancel);
   final dateStr = req.createdAt.toString().substring(0, 16);
 
   return Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     margin: const EdgeInsets.symmetric(vertical: 12),
     decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200)),
-    child: Column(
+        color: statusColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8)),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.blue, size: 18),
-            Expanded(
-                child:
-                    Container(height: 3, color: statusColor.withOpacity(0.4))),
-            Icon(
-                isPending
-                    ? Icons.access_time_filled
-                    : (isAccepted ? Icons.check_circle : Icons.cancel),
-                color: statusColor,
-                size: 18),
+            Icon(statusIcon, color: statusColor, size: 18),
+            const SizedBox(width: 6),
+            Text(statusLabel,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor)),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Sent\n$dateStr',
-                style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            Text(
-                isPending
-                    ? 'Pending\nWaiting...'
-                    : (isAccepted ? 'Accepted\nDone' : 'Rejected\nClosed'),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: statusColor,
-                    fontWeight: FontWeight.bold)),
-          ],
-        )
+        Text('Sent: $dateStr',
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     ),
   );
@@ -230,10 +218,10 @@ class _TenantSentTabState extends State<_TenantSentTab> {
           );
         }
 
-        if (snapshot.hasError) {
-          return Center(
-              child: Text('Error loading requests.',
-                  style: TextStyle(color: Colors.red.shade400)));
+        if (snapshot.hasError && !snapshot.hasData) {
+          return const Center(
+              child: Text('Aapne abhi tak koi request nahi bheji',
+                  style: TextStyle(color: Colors.grey)));
         }
 
         var requests = snapshot.data ?? [];
@@ -400,11 +388,10 @@ class _TenantIncomingTabState extends State<_TenantIncomingTab> {
     );
 
     if (confirm != null) {
-      await FirebaseFirestore.instance.collection('reports').add({
-        'reporterId': widget.userId,
-        'reportedUserId': ownerId,
-        'reason': confirm,
-        'createdAt': FieldValue.serverTimestamp()
+      await Supabase.instance.client.from('reports').insert({
+        'reporter_id': widget.userId,
+        'reported_user_id': ownerId,
+        'report_type': confirm,
       });
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -432,10 +419,10 @@ class _TenantIncomingTabState extends State<_TenantIncomingTab> {
                           borderRadius: BorderRadius.circular(12)))));
         }
 
-        if (snapshot.hasError) {
-          return Center(
-              child: Text('Error loading requests.',
-                  style: TextStyle(color: Colors.red.shade400)));
+        if (snapshot.hasError && !snapshot.hasData) {
+          return const Center(
+              child: Text('Koi naya invite nahi aaya',
+                  style: TextStyle(color: Colors.grey)));
         }
 
         var requests = snapshot.data ?? [];
@@ -539,14 +526,13 @@ class _CallOwnerButtonState extends State<_CallOwnerButton> {
   Future<void> _fetchOwnerPhone() async {
     setState(() => _state = _CallState.loading);
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.ownerId)
-          .get()
-          .timeout(const Duration(seconds: 5));
-      final phone = doc.exists
-          ? (doc.data() as Map<String, dynamic>)['phone'] as String?
-          : null;
+      final data = await Supabase.instance.client
+          .from('users')
+          .select('phone')
+          .eq('id', widget.ownerId)
+          .maybeSingle();
+
+      final phone = data?['phone'] as String?;
       if (phone == null || phone.isEmpty) {
         if (mounted) setState(() => _state = _CallState.error);
         return;
@@ -598,7 +584,7 @@ class _CallOwnerButtonState extends State<_CallOwnerButton> {
                 _state == _CallState.loading ? 'Loading...' : 'Call Owner',
                 style: const TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4CAF50),
+                backgroundColor: const Color(0xFF1E88E5),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6))),
           ),

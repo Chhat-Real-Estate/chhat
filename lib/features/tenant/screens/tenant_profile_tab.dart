@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TenantProfileTab extends StatelessWidget {
@@ -23,16 +24,16 @@ class TenantProfileTab extends StatelessWidget {
           if (!snapshot.hasData)
             return const Center(
                 child: CircularProgressIndicator(color: Color(0xFFC62828)));
-          return StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('tenantProfiles')
-                .doc(snapshot.data)
-                .snapshots(),
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: Supabase.instance.client
+                .from('tenant_profiles')
+                .stream(primaryKey: ['user_id'])
+                .eq('user_id', snapshot.data!),
             builder: (context, docSnap) {
               if (!docSnap.hasData)
                 return const Center(
                     child: CircularProgressIndicator(color: Color(0xFFC62828)));
-              final data = docSnap.data!.data() as Map<String, dynamic>? ?? {};
+              final data = docSnap.data!.isNotEmpty ? docSnap.data!.first : <String, dynamic>{};
 
               int filled = 0;
               if (data['name'] != null &&
@@ -157,8 +158,11 @@ class TenantProfileTab extends StatelessWidget {
                           border: Border.all(color: Colors.grey.shade300)),
                       child: Column(
                         children: [
-                          _buildDetailRow('Occupation',
-                              data['occupation']?.toString() ?? 'N/A'),
+                          if ((data['propertyKind']?.toString() ??
+                                  'residential') ==
+                              'residential')
+                            _buildDetailRow('Occupation',
+                                data['occupation']?.toString() ?? 'N/A'),
                           _buildDetailRow('Tenant Type',
                               data['tenantType']?.toString() ?? 'N/A'),
                           _buildDetailRow('Move-In Date',

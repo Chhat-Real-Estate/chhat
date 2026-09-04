@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart'; // For Clipboard
 import 'package:go_router/go_router.dart';
@@ -31,7 +32,7 @@ class _DataExportScreenState extends State<DataExportScreen> {
         throw Exception('User ID nahi mila. Kripya dobara login karein.');
       }
 
-      final db = FirebaseFirestore.instance;
+      final supabase = Supabase.instance.client;
       StringBuffer report = StringBuffer();
 
       report.writeln('====================================');
@@ -41,40 +42,40 @@ class _DataExportScreenState extends State<DataExportScreen> {
           'Generated on: ${DateTime.now().toString().substring(0, 16)}');
       report.writeln('User ID: $userId\n');
 
-      // 1. Fetch User Data (Phone, Consent)
-      final userDoc = await db.collection('users').doc(userId).get();
+      // 1. Fetch User Data
+      final uData = await supabase
+          .from('users')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
       String activeRole = 'tenant';
-      if (userDoc.exists) {
-        final uData = userDoc.data()!;
-        activeRole = uData['activeRole'] ?? uData['role'] ?? 'tenant';
+      if (uData != null) {
+        activeRole = uData['active_role'] ?? 'tenant';
         report.writeln('--- ACCOUNT DETAILS ---');
         report.writeln('Phone Number: ${uData['phone'] ?? 'N/A'}');
         report.writeln('Active Role: ${activeRole.toUpperCase()}');
 
-        final consentDate = uData['consentGivenAt'];
+        final consentDate = uData['consent_given_at'];
         if (consentDate != null) {
-          if (consentDate is Timestamp) {
-            report.writeln(
-                'DPDP Consent Given: ${consentDate.toDate().toString().substring(0, 16)}');
-          } else if (consentDate is String) {
-            report.writeln('DPDP Consent Given: $consentDate');
-          }
+          report.writeln('DPDP Consent Given: $consentDate');
         }
-        report
-            .writeln('Consent Version: ${uData['consentVersion'] ?? '1.0'}\n');
+        report.writeln('Consent Version: ${uData['consent_version'] ?? '1.0'}\n');
       }
 
-      // 2. Fetch Profile Data (Tenant or Owner)
-      final profileCollection =
-          activeRole == 'owner' ? 'ownerProfiles' : 'tenantProfiles';
-      final profileDoc =
-          await db.collection(profileCollection).doc(userId).get();
+      // 2. Fetch Profile Data
+      final profileTable =
+          activeRole == 'owner' ? 'owner_profiles' : 'tenant_profiles';
+      final pData = await supabase
+          .from(profileTable)
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
 
       report.writeln('--- PERSONAL PROFILE ($activeRole) ---');
-      if (profileDoc.exists) {
-        final pData = profileDoc.data()!;
+      if (pData != null) {
         pData.forEach((key, value) {
-          if (key != 'createdAt' && key != 'updatedAt') {
+          if (key != 'created_at' && key != 'updated_at') {
             report.writeln('$key: $value');
           }
         });
@@ -83,44 +84,43 @@ class _DataExportScreenState extends State<DataExportScreen> {
       }
       report.writeln('');
 
-      // 3. Fetch Requests (Both Sent and Incoming)
-      final requestsSnap = await db
-          .collection('requests')
-          .where(activeRole == 'tenant' ? 'tenantId' : 'ownerId',
-              isEqualTo: userId)
-          .get();
+      // 3. Fetch Requests
+      final requestKey = activeRole == 'tenant' ? 'tenant_id' : 'owner_id';
+      final requests = await supabase
+          .from('requests')
+          .select()
+          .eq(requestKey, userId);
 
       report.writeln('--- MY REQUESTS ---');
-      if (requestsSnap.docs.isEmpty) {
+      if ((requests as List).isEmpty) {
         report.writeln('No requests found.');
       } else {
-        report.writeln('Total Requests: ${requestsSnap.docs.length}');
-        for (var doc in requestsSnap.docs) {
-          final rData = doc.data();
+        report.writeln('Total Requests: ${requests.length}');
+        for (var rData in requests) {
           report.writeln(
-              '- Room: ${rData['area'] ?? 'Unknown'}, Rent: ₹${rData['rent']}, Status: ${rData['status']}, Sent by: ${rData['senderType']}');
+              '- Room: ${rData['area'] ?? 'Unknown'}, Rent: ₹${rData['rent']}, Status: ${rData['status']}, Sent by: ${rData['sender_type']}');
         }
       }
       report.writeln('');
 
       // 4. Fetch Listings (If Owner)
       if (activeRole == 'owner') {
-        final listingsSnap = await db
-            .collection('listings')
-            .where('ownerId', isEqualTo: userId)
-            .get();
+        final listings = await supabase
+            .from('listings')
+            .select()
+            .eq('owner_id', userId);
 
         report.writeln('--- MY LISTINGS ---');
-        if (listingsSnap.docs.isEmpty) {
+        if ((listings as List).isEmpty) {
           report.writeln('No listings found.');
         } else {
-          report.writeln('Total Listings: ${listingsSnap.docs.length}');
-          for (var doc in listingsSnap.docs) {
-            final lData = doc.data();
+          report.writeln('Total Listings: ${listings.length}');
+          for (var rData in listings) {
             report.writeln(
-                '- ${lData['propertyCategory']} in ${lData['area']} (₹${lData['rent']}/month) - Status: ${lData['active'] == true ? 'Active' : 'Inactive'}');
+                '- Room: ${rData['area'] ?? 'Unknown'}, Rent: ₹${rData['rent']}, Active: ${rData['active']}');
           }
         }
+        report.writeln('');
       }
 
       report.writeln('\n====================================');

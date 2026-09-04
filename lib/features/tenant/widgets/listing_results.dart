@@ -102,17 +102,21 @@ class _ListingResultsState extends State<ListingResults> {
       stream: _listingsStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
+          // FIX: pehle hamesha "Internet check karein" bolta tha chahe
+          // asli wajah kuch bhi ho (missing Firestore index, permission
+          // error, etc.) — jhoothi/misleading error thi. Ab honest generic
+          // message; asli reason AppLogger se already logged hai.
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.wifi_off_rounded,
+                const Icon(Icons.error_outline_rounded,
                     size: 64, color: Color(0xFFCCCCCC)),
                 const SizedBox(height: 16),
                 const Text('Rooms load nahi ho sake.',
                     style: TextStyle(fontSize: 16, color: Color(0xFF999999))),
                 const SizedBox(height: 8),
-                const Text('Internet check karein aur wapas try karein.',
+                const Text('Kuch problem aa gayi. Thodi der baad try karein.',
                     style: TextStyle(fontSize: 14, color: Color(0xFFBBBBBB))),
                 const SizedBox(height: 20),
                 OutlinedButton.icon(

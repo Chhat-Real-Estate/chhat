@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/auth_service.dart';
 
 // --- ALL NEW CLEAN ARCHITECTURE IMPORTS ---
 import '../../features/splash/screens/splash_screen.dart';
@@ -25,15 +27,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
 
-    // Back button handle karo — certain routes pe back disable
+    // FIX #15: Route guarding and public paths
     redirect: (context, state) {
-      final isLoggedIn = FirebaseAuth.instance.currentUser != null;
-      const publicPaths = ['/', '/phone', '/otp'];
+      final isLoggedIn = AuthService.isLoggedIn ||
+          FirebaseAuth.instance.currentUser != null;
+      const publicPaths = ['/', '/phone', '/otp', '/privacy-policy'];
       final isPublic = publicPaths.contains(state.matchedLocation);
 
       if (!isLoggedIn && !isPublic) {
         return '/phone';
       }
+
+      // Agar already logged in hai aur phone/otp screen khol raha hai, root pe bhej do
+      if (isLoggedIn && (state.matchedLocation == '/phone' || state.matchedLocation == '/otp')) {
+        return '/';
+      }
+
       return null;
     },
 
@@ -83,7 +92,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         pageBuilder: (context, state) {
-          final userId = state.extra as String?;
+          final userId = (state.extra as String?) ??
+              FirebaseAuth.instance.currentUser?.uid;
           if (userId == null) {
             return const NoTransitionPage(child: PhoneScreen());
           }
@@ -133,10 +143,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/edit-profile',
         pageBuilder: (context, state) {
-          final activeRole = state.extra as String?;
-          if (activeRole == null) {
-            return const NoTransitionPage(child: PhoneScreen());
-          }
+          // FIX #25: Fallback to tenant role rather than throwing to phone screen
+          final activeRole = (state.extra as String?) ?? 'tenant';
           return NoTransitionPage(
             child: EditProfileScreen(activeRole: activeRole),
           );
@@ -174,8 +182,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/room-detail',
         pageBuilder: (context, state) {
           final listing = state.extra as ListingModel?;
+          // FIX #25: Show informative fallback instead of sending to phone screen
           if (listing == null) {
-            return const NoTransitionPage(child: PhoneScreen());
+            return NoTransitionPage(
+              child: Scaffold(
+                appBar: AppBar(title: const Text('Property Details')),
+                body: const Center(
+                  child: Text('Property details could not be loaded.'),
+                ),
+              ),
+            );
           }
           return NoTransitionPage(
             child: RoomDetailScreen(listing: listing),
